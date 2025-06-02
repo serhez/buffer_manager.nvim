@@ -5,7 +5,6 @@ local utils = require("buffer_manager.utils")
 local log = require("buffer_manager.dev").log
 local marks = require("buffer_manager").marks
 
-
 local version_info = vim.inspect(vim.version())
 local version_minor = tonumber(version_info:match("minor = (%d+)"))
 
@@ -95,11 +94,10 @@ local function can_be_deleted(bufname, bufnr)
   return (
     vim.api.nvim_buf_is_valid(bufnr)
     and (not string_starts(bufname, "term://"))
-    and (not vim.bo[bufnr].modified)
+    and not vim.bo[bufnr].modified
     and bufnr ~= -1
   )
 end
-
 
 local function is_buffer_in_marks(bufnr)
   for _, mark in pairs(marks) do
@@ -109,7 +107,6 @@ local function is_buffer_in_marks(bufnr)
   end
   return false
 end
-
 
 local function get_mark_by_name(name, specific_marks)
   local ref_name = nil
@@ -136,7 +133,6 @@ local function get_mark_by_name(name, specific_marks)
   end
   return nil
 end
-
 
 local function update_buffers()
   -- Check deletions
@@ -168,7 +164,6 @@ local function remove_mark(idx)
     end
   end
 end
-
 
 local function order_buffers()
   if string_starts(config.order_buffers, "filename") then
@@ -208,7 +203,6 @@ local function order_buffers()
   end
 end
 
-
 local function update_marks()
   -- Check if any buffer has been deleted
   -- If so, remove it from marks
@@ -234,7 +228,6 @@ local function update_marks()
   end
 end
 
-
 local function set_menu_keybindings()
   vim.api.nvim_buf_set_keymap(
     Buffer_manager_bufh,
@@ -255,7 +248,9 @@ local function set_menu_keybindings()
       Buffer_manager_bufh,
       "n",
       value.key,
-      "<Cmd>lua require('buffer_manager.ui').select_menu_item('"..value.command.."')<CR>",
+      "<Cmd>lua require('buffer_manager.ui').select_menu_item('"
+        .. value.command
+        .. "')<CR>",
       {}
     )
   end
@@ -266,27 +261,27 @@ local function set_menu_keybindings()
     )
   )
   vim.cmd(
-    "autocmd BufLeave <buffer> ++nested ++once silent"..
-    " lua require('buffer_manager.ui').toggle_quick_menu()"
+    "autocmd BufLeave <buffer> ++nested ++once silent"
+      .. " lua require('buffer_manager.ui').toggle_quick_menu()"
   )
   vim.cmd(
     string.format(
-      "autocmd BufWriteCmd <buffer=%s>"..
-      " lua require('buffer_manager.ui').on_menu_save()",
+      "autocmd BufWriteCmd <buffer=%s>"
+        .. " lua require('buffer_manager.ui').on_menu_save()",
       Buffer_manager_bufh
     )
   )
   -- Go to file hitting its line number
   local str = config.line_keys
   for i = 1, #str do
-    local c = str:sub(i,i)
+    local c = str[i]
     vim.api.nvim_buf_set_keymap(
       Buffer_manager_bufh,
       "n",
       c,
       string.format(
-        "<Cmd>%s <bar> lua require('buffer_manager.ui')"..
-        ".select_menu_item()<CR>",
+        "<Cmd>%s <bar> lua require('buffer_manager.ui')"
+          .. ".select_menu_item()<CR>",
         i
       ),
       {}
@@ -294,13 +289,16 @@ local function set_menu_keybindings()
   end
 end
 
-
 local function set_win_buf_options(contents, current_buf_line)
-  vim.api.nvim_set_option_value("number", true, { win = Buffer_manager_win_id })
+  vim.api.nvim_set_option_value(
+    "number",
+    false,
+    { win = Buffer_manager_win_id }
+  )
   for key, value in pairs(config.win_extra_options) do
     vim.api.nvim_set_option_value(key, value, { win = Buffer_manager_win_id })
   end
-  vim.api.nvim_buf_set_name(Buffer_manager_bufh, "buffer_manager-menu")
+  vim.api.nvim_buf_set_name(Buffer_manager_bufh, "Buffers")
   vim.api.nvim_buf_set_lines(Buffer_manager_bufh, 0, #contents, false, contents)
   -- Set functions depending on Neovim version
   if version_minor > 9 then
@@ -320,17 +318,23 @@ local function set_win_buf_options(contents, current_buf_line)
       { buf = Buffer_manager_bufh }
     )
   else
-    vim.api.nvim_buf_set_option(Buffer_manager_bufh, "filetype", "buffer_manager")
+    vim.api.nvim_buf_set_option(
+      Buffer_manager_bufh,
+      "filetype",
+      "buffer_manager"
+    )
     vim.api.nvim_buf_set_option(Buffer_manager_bufh, "buftype", "acwrite")
     vim.api.nvim_buf_set_option(Buffer_manager_bufh, "bufhidden", "delete")
   end
   vim.cmd(string.format(":call cursor(%d, %d)", current_buf_line, 1))
 end
 
-
 function M.toggle_quick_menu()
   log.trace("toggle_quick_menu()")
-  if Buffer_manager_win_id ~= nil and vim.api.nvim_win_is_valid(Buffer_manager_win_id) then
+  if
+    Buffer_manager_win_id ~= nil
+    and vim.api.nvim_win_is_valid(Buffer_manager_win_id)
+  then
     if vim.api.nvim_buf_get_changedtick(vim.fn.bufnr()) > 0 then
       M.on_menu_save()
     end
@@ -376,7 +380,8 @@ function M.toggle_quick_menu()
       local display_filename = current_mark.filename
       if not string_starts(display_filename, "term://") then
         if config.short_file_names then
-          display_filename = utils.get_short_file_name(display_filename, current_short_fns)
+          display_filename =
+            utils.get_short_file_name(display_filename, current_short_fns)
           current_short_fns[display_filename] = true
         elseif config.format_function then
           display_filename = config.format_function(display_filename)
@@ -388,10 +393,10 @@ function M.toggle_quick_menu()
           display_filename = utils.get_short_term_name(display_filename)
         end
       end
-      if config.show_indicators == 'before' then
-         contents[line] = string.format("      %s", display_filename)
+      if config.show_indicators == "before" then
+        contents[line] = string.format("      %s", display_filename)
       else
-         contents[line] = string.format("%s", display_filename)
+        contents[line] = string.format("%s", display_filename)
       end
       line = line + 1
     end
@@ -400,124 +405,20 @@ function M.toggle_quick_menu()
   set_win_buf_options(contents, current_buf_line)
   set_menu_keybindings()
 
-  -- Indicators (chars in the same column are mutually exclusive):
-  -- u       an unlisted buffer (only displayed when [!] is used)
-  --        |unlisted-buffer|
-  --  %     the buffer in the current window
-  --  #     the alternate buffer for ":e #" and CTRL-^
-  --   a    an active buffer: it is loaded and visible
-  --   h    a hidden buffer: It is loaded, but currently not
-  --        displayed in a window |hidden-buffer|
-  --    -   a buffer with 'modifiable' off
-  --    =   a readonly buffer
-  --    R   a terminal buffer with a running job
-  --    F   a terminal buffer with a finished job
-  --    ?   a terminal buffer without a job: `:terminal NONE`
-  --     +  a modified buffer
-  --     x  a buffer with read errors
-  local bufs_list = vim.api.nvim_list_bufs()
-  for idx, mark in pairs(marks) do
-    for _, ibuf in pairs(bufs_list) do
-      if mark.buf_id == ibuf then
-        local indicators = "     "
-        local buflisted
-        local modifiable
-        local modified
-        local readonly
-        local buftype
-        local terminal_job_id
-        if version_minor > 9 then
-          buflisted = vim.api.nvim_get_option_value("buflisted", { buf = ibuf })
-          modifiable = vim.api.nvim_get_option_value("modifiable", { buf = ibuf })
-          modified = vim.api.nvim_get_option_value("modified", { buf = ibuf })
-          readonly = vim.api.nvim_get_option_value("readonly", { buf = ibuf })
-          buftype = vim.api.nvim_get_option_value("buftype", { buf = ibuf })
-        else
-          buflisted = vim.api.nvim_buf_get_option(ibuf, "buflisted")
-          modifiable = vim.api.nvim_buf_get_option(ibuf, "modifiable")
-          modified = vim.api.nvim_buf_get_option(ibuf, "modified")
-          readonly = vim.api.nvim_buf_get_option(ibuf, "readonly")
-          buftype = vim.api.nvim_buf_get_option(ibuf, "buftype")
-        end
-        if not buflisted then
-          indicators = utils.replace_char(indicators, 1, "u")
-        end
-        if ibuf == real_current_buf then
-          indicators = utils.replace_char(indicators, 2, "%")
-        elseif ibuf == real_alternate_buf then
-          indicators = utils.replace_char(indicators, 2, "#")
-        end
-        if vim.tbl_count(vim.fn.win_findbuf(ibuf)) ~= 0 then
-          indicators = utils.replace_char(indicators, 3, "a")
-        elseif vim.api.nvim_buf_is_loaded(ibuf) then
-          indicators = utils.replace_char(indicators, 3, "h")
-        end
-        if not modifiable then
-          indicators = utils.replace_char(indicators, 4, "-")
-        elseif readonly then
-          indicators = utils.replace_char(indicators, 4, "=")
-        elseif buftype == "terminal" then
-          if version_minor > 9 then
-            terminal_job_id = vim.api.nvim_get_option_value("terminal_job_id", { buf = ibuf })
-          else
-            terminal_job_id = vim.api.nvim_buf_get_option(ibuf, "terminal_job_id")
-          end
-          if terminal_job_id then
-            indicators = utils.replace_char(indicators, 4, "R")
-          elseif terminal_job_id == 0 then
-            indicators = utils.replace_char(indicators, 4, "F")
-          else
-            indicators = utils.replace_char(indicators, 4, "?")
-          end
-        end
-        if modified then
-          indicators = utils.replace_char(indicators, 5, "+")
-          if version_minor > 9 then
-            vim.hl.range(
-              Buffer_manager_bufh,
-              ns_mod,
-              "BufferManagerModified",
-              {idx-1, 0},
-              {idx-1, -1},
-              {}
-            )
-          else
-            -- function vim.api.nvim_buf_add_highlight(buffer: integer, ns_id: integer, hl_group: string, line: integer, col_start: integer, col_end: integer)
-            vim.api.nvim_buf_add_highlight(
-              Buffer_manager_bufh,
-              -1,
-              "BufferManagerModified",
-              idx-1,
-              0,
-              -1
-            )
-          end
-        end
-        -- TODO: Add read errors indicator
-
-        if config.show_indicators then
-          local virt_text_pos = "eol"
-          if config.show_indicators == "before" then
-            virt_text_pos = "overlay"
-          end
-          vim.api.nvim_buf_set_extmark(
-            Buffer_manager_bufh,
-            ns_ind,
-            idx - 1,
-            0,
-            {
-              virt_text = { { indicators, "Comment" } },
-              -- Position: beginning of line, with padding
-              virt_text_pos = virt_text_pos,
-              hl_mode = "combine",
-            }
-          )
-        end
-      end
-    end
+  -- Show the keys with extmarks
+  local ns_id = vim.api.nvim_create_namespace("BufferManagerIndicator")
+  for i = 1, #marks do
+    vim.api.nvim_buf_set_extmark(Buffer_manager_bufh, ns_id, i - 1, 0, {
+      virt_text = {
+        { " ", "FloatNormal" },
+        { " " .. config.line_keys[i] .. " ", "Search" },
+        { "  ", "FloatNormal" },
+      },
+      virt_text_pos = "inline",
+      hl_mode = "replace",
+    })
   end
 end
-
 
 function M.select_menu_item(command)
   local idx = vim.fn.line(".")
@@ -528,7 +429,6 @@ function M.select_menu_item(command)
   M.nav_file(idx, command)
   update_buffers()
 end
-
 
 local function get_menu_items()
   log.trace("_get_menu_items()")
@@ -545,7 +445,6 @@ local function get_menu_items()
 
   return indices
 end
-
 
 local function set_mark_list(new_list)
   log.trace("set_mark_list(): New list:", new_list)
@@ -571,12 +470,10 @@ local function set_mark_list(new_list)
   end
 end
 
-
 function M.on_menu_save()
   log.trace("on_menu_save()")
   set_mark_list(get_menu_items())
 end
-
 
 function M.nav_file(id, command)
   log.trace("nav_file(): Navigating to", id)
@@ -610,7 +507,6 @@ local function get_current_buf_line()
   return -1
 end
 
-
 function M.nav_next()
   log.trace("nav_next()")
   update_marks()
@@ -628,7 +524,6 @@ function M.nav_next()
   end
 end
 
-
 function M.nav_prev()
   log.trace("nav_prev()")
   update_marks()
@@ -639,13 +534,12 @@ function M.nav_prev()
   local prev_buf_line = current_buf_line - 1
   if prev_buf_line < 1 then
     if config.loop_nav then
-        M.nav_file(#marks)
+      M.nav_file(#marks)
     end
   else
     M.nav_file(prev_buf_line)
   end
 end
-
 
 function M.location_window(options)
   local default_options = {
@@ -667,7 +561,6 @@ function M.location_window(options)
   }
 end
 
-
 function M.save_menu_to_file(filename)
   log.trace("save_menu_to_file()")
   if filename == nil or filename == "" then
@@ -686,7 +579,6 @@ function M.save_menu_to_file(filename)
   end
   file:close()
 end
-
 
 function M.load_menu_from_file(filename)
   log.trace("load_menu_from_file()")
@@ -709,6 +601,5 @@ function M.load_menu_from_file(filename)
   set_mark_list(lines)
   update_buffers()
 end
-
 
 return M

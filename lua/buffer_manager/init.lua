@@ -3,7 +3,6 @@ local log = Dev.log
 local buffer_is_valid = require("buffer_manager.utils").buffer_is_valid
 local merge_tables = require("buffer_manager.utils").merge_tables
 
-
 local M = {}
 
 BufferManagerConfig = BufferManagerConfig or {}
@@ -19,17 +18,13 @@ function M.initialize_marks()
     local filename = buf_name
     -- if buffer is listed, then add to contents and marks
     if buffer_is_valid(buf_id, buf_name) then
-      table.insert(
-        M.marks,
-        {
-          filename = filename,
-          buf_id = buf_id,
-        }
-      )
+      table.insert(M.marks, {
+        filename = filename,
+        buf_id = buf_id,
+      })
     end
   end
 end
-
 
 function M.setup(config)
   log.trace("setup(): Setting up...")
@@ -39,12 +34,12 @@ function M.setup(config)
   end
 
   local default_config = {
-    line_keys = "1234567890",
+    line_keys = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" },
     select_menu_item_commands = {
       edit = {
         key = "<CR>",
-        command = "edit"
-      }
+        command = "edit",
+      },
     },
     focus_alternate_buffer = false,
     width = nil,
@@ -55,7 +50,7 @@ function M.setup(config)
     loop_nav = true,
     highlight = "",
     win_extra_options = {},
-    borderchars = { "─", "│", "─", "│", "╭", "╮", "╯", "╰" },
+    borderchars = { "", "", "", "", "", "", "", "" },
     format_function = nil,
     order_buffers = nil,
     show_indicators = nil,
@@ -66,7 +61,6 @@ function M.setup(config)
   BufferManagerConfig = complete_config
   log.debug("setup(): Config", BufferManagerConfig)
 end
-
 
 function M.get_config()
   log.trace("get_config()")
