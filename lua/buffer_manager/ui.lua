@@ -8,9 +8,6 @@ local marks = require("buffer_manager").marks
 local version_info = vim.inspect(vim.version())
 local version_minor = tonumber(version_info:match("minor = (%d+)"))
 
-local ns_mod = vim.api.nvim_create_namespace("BufferManagerModified")
-local ns_ind = vim.api.nvim_create_namespace("BufferManagerIndicator")
-
 local M = {}
 
 Buffer_manager_win_id = nil
@@ -32,8 +29,8 @@ end
 local function create_window()
   log.trace("_create_window()")
 
-  local width = 60
-  local height = 10
+  local width = require("buffer_manager").get_config().width
+  local height = require("buffer_manager").get_config().height
 
   if config then
     if config.width ~= nil then
@@ -59,7 +56,7 @@ local function create_window()
   local bufnr = vim.api.nvim_create_buf(false, false)
 
   local win_config = {
-    title = "Buffers",
+    title = "",
     line = math.floor(((vim.o.lines - height) / 2) - 1),
     col = math.floor((vim.o.columns - width) / 2),
     minwidth = width,
@@ -110,7 +107,6 @@ end
 
 local function get_mark_by_name(name, specific_marks)
   local ref_name = nil
-  local current_short_fns = {}
   for _, mark in pairs(specific_marks) do
     ref_name = mark.filename
     if string_starts(mark.filename, "term://") then
@@ -119,8 +115,7 @@ local function get_mark_by_name(name, specific_marks)
       end
     else
       if config.short_file_names then
-        ref_name = utils.get_short_file_name(mark.filename, current_short_fns)
-        current_short_fns[ref_name] = true
+        ref_name = utils.get_short_file_name(config, mark.filename)
       elseif config.format_function then
         ref_name = config.format_function(mark.filename)
       else
@@ -348,11 +343,10 @@ function M.toggle_quick_menu()
   else
     current_buf_id = vim.fn.bufnr()
   end
-  local real_alternate_buf = vim.fn.bufnr("#")
-  local real_current_buf = vim.fn.bufnr()
 
   local win_info = create_window()
   local contents = {}
+  local extmark_contents = {}
   initial_marks = {}
 
   Buffer_manager_win_id = win_info.win_id
@@ -363,7 +357,6 @@ function M.toggle_quick_menu()
   -- set initial_marks
   local current_buf_line = 1
   local line = 1
-  local current_short_fns = {}
   for idx, mark in pairs(marks) do
     -- Add buffer only if it does not already exist
     if vim.fn.buflisted(mark.buf_id) ~= 1 then
@@ -378,26 +371,15 @@ function M.toggle_quick_menu()
         current_buf_line = line
       end
       local display_filename = current_mark.filename
+      local display_path = ""
       if not string_starts(display_filename, "term://") then
-        if config.short_file_names then
-          display_filename =
-            utils.get_short_file_name(display_filename, current_short_fns)
-          current_short_fns[display_filename] = true
-        elseif config.format_function then
-          display_filename = config.format_function(display_filename)
-        else
-          display_filename = utils.normalize_path(display_filename)
-        end
+        display_filename, display_path =
+          utils.get_short_file_name(config, display_filename)
       else
-        if config.short_term_names then
-          display_filename = utils.get_short_term_name(display_filename)
-        end
+        display_filename = utils.get_short_term_name(display_filename)
       end
-      if config.show_indicators == "before" then
-        contents[line] = string.format("      %s", display_filename)
-      else
-        contents[line] = string.format("%s", display_filename)
-      end
+      extmark_contents[line] = { display_filename, display_path }
+      contents[line] = display_filename
       line = line + 1
     end
   end
@@ -410,12 +392,15 @@ function M.toggle_quick_menu()
   for i = 1, #marks do
     vim.api.nvim_buf_set_extmark(Buffer_manager_bufh, ns_id, i - 1, 0, {
       virt_text = {
-        { " ", "FloatNormal" },
+        { "  ", "FloatNormal" },
         { " " .. config.line_keys[i] .. " ", "Search" },
         { "  ", "FloatNormal" },
+        { extmark_contents[i][1] or "", config.hl_filename or "Bold" },
+        { extmark_contents[i][2] or "", config.hl_path or "Comment" },
       },
-      virt_text_pos = "inline",
+      virt_text_pos = "overlay",
       hl_mode = "replace",
+      cursorline_hl_group = "CursorLine",
     })
   end
 end
@@ -447,8 +432,6 @@ local function get_menu_items()
 end
 
 local function set_mark_list(new_list)
-  log.trace("set_mark_list(): New list:", new_list)
-
   local original_marks = utils.deep_copy(marks)
   marks = {}
   for _, v in pairs(new_list) do
@@ -545,8 +528,8 @@ function M.location_window(options)
   local default_options = {
     relative = "editor",
     style = "minimal",
-    width = 30,
-    height = 15,
+    width = options.width,
+    height = options.height,
     row = 2,
     col = 2,
   }
