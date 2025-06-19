@@ -28,7 +28,7 @@ function M.get_short_file_name(config, file)
 
     -- If the path is empty or has no slashes (i.e., just the filename), return an empty string
     if dirs == "" or not dirs:find("/") then
-      return "", ""
+      return filename, ""
     end
 
     -- Remove the last element (the filename, after the last "/")

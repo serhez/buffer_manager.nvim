@@ -42,7 +42,7 @@ function M.setup(config)
       },
     },
     focus_alternate_buffer = false,
-    width = 50,
+    width = 65,
     height = 10,
     short_file_names = false,
     show_depth = true,
@@ -56,7 +56,7 @@ function M.setup(config)
     dir_separator_icon = "/",
     path_surrounding_icon = { "[", "]" },
     format_function = nil,
-    order_buffers = nil,
+    order_buffers = "fullpath",
     show_indicators = nil,
   }
 

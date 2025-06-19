@@ -56,14 +56,18 @@ local function create_window()
   local bufnr = vim.api.nvim_create_buf(false, false)
 
   local win_config = {
-    title = "",
+    -- title = { { text = "Buffers", pos = "N" } },
+    -- titlehighlight = "Search",
+    -- titlepos = "center",
     line = math.floor(((vim.o.lines - height) / 2) - 1),
     col = math.floor((vim.o.columns - width) / 2),
+    cursorline = true,
     minwidth = width,
     minheight = height,
     borderchars = borderchars,
   }
   local Buffer_manager_win_id, win = popup.create(bufnr, win_config)
+  vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 
   if config.highlight ~= "" then
     vim.api.nvim_set_option_value(
@@ -103,30 +107,6 @@ local function is_buffer_in_marks(bufnr)
     end
   end
   return false
-end
-
-local function get_mark_by_name(name, specific_marks)
-  local ref_name = nil
-  for _, mark in pairs(specific_marks) do
-    ref_name = mark.filename
-    if string_starts(mark.filename, "term://") then
-      if config.short_term_names then
-        ref_name = utils.get_short_term_name(mark.filename)
-      end
-    else
-      if config.short_file_names then
-        ref_name = utils.get_short_file_name(config, mark.filename)
-      elseif config.format_function then
-        ref_name = config.format_function(mark.filename)
-      else
-        ref_name = utils.normalize_path(mark.filename)
-      end
-    end
-    if name == ref_name then
-      return mark
-    end
-  end
-  return nil
 end
 
 local function update_buffers()
@@ -206,6 +186,7 @@ local function update_marks()
       remove_mark(idx)
     end
   end
+
   -- Check if any buffer has been added
   -- If so, add it to marks
   for _, buf in pairs(vim.api.nvim_list_bufs()) do
@@ -217,6 +198,7 @@ local function update_marks()
       })
     end
   end
+
   -- Order the buffers, if the option is set
   if config.order_buffers then
     order_buffers()
@@ -294,7 +276,10 @@ local function set_win_buf_options(contents, current_buf_line)
     vim.api.nvim_set_option_value(key, value, { win = Buffer_manager_win_id })
   end
   vim.api.nvim_buf_set_name(Buffer_manager_bufh, "Buffers")
+  vim.api.nvim_buf_set_option(Buffer_manager_bufh, "modifiable", true)
   vim.api.nvim_buf_set_lines(Buffer_manager_bufh, 0, #contents, false, contents)
+  vim.api.nvim_buf_set_option(Buffer_manager_bufh, "modifiable", false)
+
   -- Set functions depending on Neovim version
   if version_minor > 9 then
     vim.api.nvim_set_option_value(
@@ -379,7 +364,11 @@ function M.toggle_quick_menu()
         display_filename = utils.get_short_term_name(display_filename)
       end
       extmark_contents[line] = { display_filename, display_path }
-      contents[line] = display_filename
+      contents[line] = "   "
+        .. config.line_keys[idx]
+        .. "   "
+        .. display_filename
+        .. display_path
       line = line + 1
     end
   end
@@ -391,6 +380,9 @@ function M.toggle_quick_menu()
   local ns_id = vim.api.nvim_create_namespace("BufferManagerIndicator")
   for i = 1, #marks do
     vim.api.nvim_buf_set_extmark(Buffer_manager_bufh, ns_id, i - 1, 0, {
+      undo_restore = false,
+      invalidate = true,
+      conceal = "",
       virt_text = {
         { "  ", "FloatNormal" },
         { " " .. config.line_keys[i] .. " ", "Search" },
@@ -399,7 +391,7 @@ function M.toggle_quick_menu()
         { extmark_contents[i][2] or "", config.hl_path or "Comment" },
       },
       virt_text_pos = "overlay",
-      hl_mode = "replace",
+      hl_mode = "combine",
       cursorline_hl_group = "CursorLine",
     })
   end
@@ -415,47 +407,9 @@ function M.select_menu_item(command)
   update_buffers()
 end
 
-local function get_menu_items()
-  log.trace("_get_menu_items()")
-  local lines = vim.api.nvim_buf_get_lines(Buffer_manager_bufh, 0, -1, true)
-  local indices = {}
-
-  for _, line in pairs(lines) do
-    if not utils.is_white_space(line) then
-      -- Strip leading spaces from line
-      line = line:gsub("^%s+", "")
-      table.insert(indices, line)
-    end
-  end
-
-  return indices
-end
-
-local function set_mark_list(new_list)
-  local original_marks = utils.deep_copy(marks)
-  marks = {}
-  for _, v in pairs(new_list) do
-    if type(v) == "string" then
-      local filename = v
-      local buf_id = nil
-      local current_mark = get_mark_by_name(filename, original_marks)
-      if current_mark then
-        filename = current_mark.filename
-        buf_id = current_mark.buf_id
-      else
-        buf_id = vim.fn.bufnr(v)
-      end
-      table.insert(marks, {
-        filename = filename,
-        buf_id = buf_id,
-      })
-    end
-  end
-end
-
 function M.on_menu_save()
   log.trace("on_menu_save()")
-  set_mark_list(get_menu_items())
+  -- TODO: save marked buffers
 end
 
 function M.nav_file(id, command)
@@ -544,6 +498,7 @@ function M.location_window(options)
   }
 end
 
+-- TODO: save the marked buffers (the ones we do not delete if too many buffers are open)
 function M.save_menu_to_file(filename)
   log.trace("save_menu_to_file()")
   if filename == nil or filename == "" then
@@ -581,7 +536,6 @@ function M.load_menu_from_file(filename)
     table.insert(lines, line)
   end
   file:close()
-  set_mark_list(lines)
   update_buffers()
 end
 
