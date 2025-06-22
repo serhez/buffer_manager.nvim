@@ -27,8 +27,8 @@ Use a buffer-like floating window where all the open buffers are listed. To sele
 * Install `buffer_manager` using your favorite plugin manager. E.g. `Packer.nvim`:
 
 ```lua
-use 'nvim-lua/plenary.nvim'  -- basic dependency
-use 'j-morano/buffer_manager.nvim'
+use("nvim-lua/plenary.nvim") -- basic dependency
+use("j-morano/buffer_manager.nvim")
 ```
 
 ## Usage
@@ -89,7 +89,7 @@ Introduce the filename directly as a function argument:
 
 The plugin can be configured through the setup function:
 ```lua
-require("buffer_manager").setup({ })
+require("buffer_manager").setup({})
 ```
 
 #### Available configuration options
@@ -146,54 +146,51 @@ vim.api.nvim_set_hl(0, "BufferManagerModified", { fg = "#0000af" })
 #### Example configuration
 
 ```lua
-local opts = {noremap = true}
+local opts = { noremap = true }
 local map = vim.keymap.set
 -- Setup
 require("buffer_manager").setup({
   select_menu_item_commands = {
     v = {
       key = "<C-v>",
-      command = "vsplit"
+      command = "vsplit",
     },
     h = {
       key = "<C-h>",
-      command = "split"
-    }
+      command = "split",
+    },
   },
   focus_alternate_buffer = false,
   short_file_names = true,
   short_term_names = true,
   loop_nav = false,
-  highlight = 'Normal:BufferManagerBorder',
+  highlight = "Normal:BufferManagerBorder",
   win_extra_options = {
-    winhighlight = 'Normal:BufferManagerNormal',
+    winhighlight = "Normal:BufferManagerNormal",
   },
 })
 -- Navigate buffers bypassing the menu
 local bmui = require("buffer_manager.ui")
-local keys = '1234567890'
+local keys = "1234567890"
 for i = 1, #keys do
-  local key = keys:sub(i,i)
-  map(
-    'n',
-    string.format('<leader>%s', key),
-    function () bmui.nav_file(i) end,
-    opts
-  )
+  local key = keys:sub(i, i)
+  map("n", string.format("<leader>%s", key), function()
+    bmui.nav_file(i)
+  end, opts)
 end
 -- Just the menu
-map({ 't', 'n' }, '<M-Space>', bmui.toggle_quick_menu, opts)
+map({ "t", "n" }, "<M-Space>", bmui.toggle_quick_menu, opts)
 -- Open menu and search
-map({ 't', 'n' }, '<M-m>', function ()
+map({ "t", "n" }, "<M-m>", function()
   bmui.toggle_quick_menu()
   -- wait for the menu to open
-  vim.defer_fn(function ()
-    vim.fn.feedkeys('/')
+  vim.defer_fn(function()
+    vim.fn.feedkeys("/")
   end, 50)
 end, opts)
 -- Next/Prev
-map('n', '<M-j>', bmui.nav_next, opts)
-map('n', '<M-k>', bmui.nav_prev, opts)
+map("n", "<M-j>", bmui.nav_next, opts)
+map("n", "<M-k>", bmui.nav_prev, opts)
 ```
 
 
@@ -238,3 +235,13 @@ All feedback is appreciated!
 This plugin is based on [Harpoon](https://github.com/ThePrimeagen/harpoon), an amazing plugin written by ThePrimeagen to easily navigate previously marked terminals and files.
 
 Also, special thanks to [bufdelete.nvim](https://github.com/famiu/bufdelete.nvim), for showing how to remove buffers correctly.
+
+## TODOs
+
+- [ ] Pinned buffers
+- [ ] Auto-prune buffers (i.e., max. amount of open buffers)
+  - Pinned buffers cannot be pruned
+  - Buffers that are open in some window/tab cannot be pruned
+  - Because of all of the above, the max. value cannot be strongly enforced (which, for me, is ok)
+  - Have a command to toggle auto-pruning
+- [ ] Hide cursor
