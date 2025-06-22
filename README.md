@@ -245,3 +245,4 @@ Also, special thanks to [bufdelete.nvim](https://github.com/famiu/bufdelete.nvim
   - Because of all of the above, the max. value cannot be strongly enforced (which, for me, is ok)
   - Have a command to toggle auto-pruning
 - [ ] Hide cursor
+- [ ] (Optional?) Make buffer uneditable and cycle through buffers (like cybu does), then disappear after some time or when a selection was made
