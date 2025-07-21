@@ -9,6 +9,34 @@ BufferManagerConfig = BufferManagerConfig or {}
 
 M.marks = {}
 
+-- All keys in the keyboard (but for navigation keys)
+M.extra_keys = {
+  "0",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "a",
+  "c",
+  "d",
+  "f",
+  "i",
+  "m",
+  "n",
+  "o",
+  "r",
+  "s",
+  "t",
+  "u",
+  "x",
+  "z",
+}
+
 function M.initialize_marks()
   local buffers = vim.api.nvim_list_bufs()
 
@@ -34,7 +62,20 @@ function M.setup(config)
   end
 
   local default_config = {
-    line_keys = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" },
+    line_keys = {
+      "a",
+      "s",
+      "d",
+      "f",
+      "r",
+      "i",
+      "o",
+      "z",
+      "x",
+      "c",
+      "n",
+      "m",
+    },
     select_menu_item_commands = {
       edit = {
         key = "<CR>",
@@ -56,11 +97,52 @@ function M.setup(config)
     dir_separator_icon = "/",
     path_surrounding_icon = { "[", "]" },
     format_function = nil,
-    order_buffers = "fullpath",
+    order_buffers = "lastused",
     show_indicators = nil,
   }
 
   local complete_config = merge_tables(default_config, config)
+
+  -- Merge keys tables, keeping the order (first the line_keys, then the extra_keys)
+  local merged_keys = {}
+  local original_keys = complete_config.line_keys or {}
+
+  -- First add all original line_keys
+  for i = 1, #original_keys do
+    table.insert(merged_keys, original_keys[i])
+  end
+
+  -- Then add all extra_keys
+  for i = 1, #M.extra_keys do
+    table.insert(merged_keys, M.extra_keys[i])
+  end
+
+  complete_config.line_keys = merged_keys
+
+  -- Remove important keys from line_keys
+  complete_config.line_keys = vim.tbl_filter(function(key)
+    return key ~= "q"
+      and key ~= "w"
+      and key ~= "e"
+      and key ~= "b"
+      and key ~= "g"
+      and key ~= "v"
+      and key ~= "y"
+      and key ~= "p"
+      and key ~= "h"
+      and key ~= "j"
+      and key ~= "k"
+      and key ~= "l"
+      and key ~= "<CR>"
+      and key ~= "<Esc>"
+  end, complete_config.line_keys)
+  for _, command in pairs(complete_config.select_menu_item_commands) do
+    if command.key then
+      complete_config.line_keys = vim.tbl_filter(function(key)
+        return key ~= command.key
+      end, complete_config.line_keys)
+    end
+  end
 
   BufferManagerConfig = complete_config
   log.debug("setup(): Config", BufferManagerConfig)

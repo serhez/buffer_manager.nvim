@@ -249,9 +249,9 @@ local function set_menu_keybindings()
     )
   )
   -- Go to file hitting its line number
-  local str = config.line_keys
-  for i = 1, #str do
-    local c = str[i]
+  local keys = config.line_keys
+  for i = 1, #keys do
+    local c = keys[i]
     vim.api.nvim_buf_set_keymap(
       Buffer_manager_bufh,
       "n",
@@ -364,8 +364,10 @@ function M.toggle_quick_menu()
         display_filename = utils.get_short_term_name(display_filename)
       end
       extmark_contents[line] = { display_filename, display_path }
+
+      local line_key = config.line_keys[line] or " "
       contents[line] = "   "
-        .. config.line_keys[idx]
+        .. line_key
         .. "   "
         .. display_filename
         .. display_path
@@ -379,13 +381,14 @@ function M.toggle_quick_menu()
   -- Show the keys with extmarks
   local ns_id = vim.api.nvim_create_namespace("BufferManagerIndicator")
   for i = 1, #marks do
+    local key = config.line_keys[i] or " "
     vim.api.nvim_buf_set_extmark(Buffer_manager_bufh, ns_id, i - 1, 0, {
       undo_restore = false,
       invalidate = true,
       conceal = "",
       virt_text = {
         { "  ", "FloatNormal" },
-        { " " .. config.line_keys[i] .. " ", "Search" },
+        { " " .. key .. " ", "Search" },
         { "  ", "FloatNormal" },
         { extmark_contents[i][1] or "", config.hl_filename or "Bold" },
         { extmark_contents[i][2] or "", config.hl_path or "Comment" },
