@@ -99,22 +99,42 @@ function M.setup(config)
     format_function = nil,
     order_buffers = "lastused",
     show_indicators = nil,
+    main_keymap = ";",
+    -- Persistent menu configuration
+    persistent_menu = {
+      enabled = true,
+      width = 50,
+      height = 15,
+      position = "top-right", -- top-left, top-right, bottom-left, bottom-right
+      offset_x = 2,
+      offset_y = 2,
+    },
   }
 
   local complete_config = merge_tables(default_config, config)
 
   -- Merge keys tables, keeping the order (first the line_keys, then the extra_keys)
+  -- but avoid duplicates
   local merged_keys = {}
   local original_keys = complete_config.line_keys or {}
+  local used_keys = {}
 
   -- First add all original line_keys
   for i = 1, #original_keys do
-    table.insert(merged_keys, original_keys[i])
+    local key = original_keys[i]
+    if not used_keys[key] then
+      table.insert(merged_keys, key)
+      used_keys[key] = true
+    end
   end
 
-  -- Then add all extra_keys
+  -- Then add extra_keys that aren't already used
   for i = 1, #M.extra_keys do
-    table.insert(merged_keys, M.extra_keys[i])
+    local key = M.extra_keys[i]
+    if not used_keys[key] then
+      table.insert(merged_keys, key)
+      used_keys[key] = true
+    end
   end
 
   complete_config.line_keys = merged_keys
@@ -135,6 +155,7 @@ function M.setup(config)
       and key ~= "l"
       and key ~= "<CR>"
       and key ~= "<Esc>"
+      and key ~= complete_config.main_keymap  -- Filter out main keymap
   end, complete_config.line_keys)
   for _, command in pairs(complete_config.select_menu_item_commands) do
     if command.key then

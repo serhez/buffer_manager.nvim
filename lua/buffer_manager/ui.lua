@@ -12,6 +12,10 @@ local M = {}
 
 Buffer_manager_win_id = nil
 Buffer_manager_bufh = nil
+-- Persistent menu state
+Persistent_menu_win_id = nil
+Persistent_menu_bufh = nil
+local last_accessed_buffer = nil
 local initial_marks = {}
 local config = buffer_manager.get_config()
 
@@ -80,6 +84,68 @@ local function create_window()
   return {
     bufnr = bufnr,
     win_id = Buffer_manager_win_id,
+  }
+end
+
+local function create_persistent_window()
+  log.trace("create_persistent_window()")
+  
+  local pconfig = config.persistent_menu
+  local width = pconfig.width
+  local height = pconfig.height
+  
+  -- Calculate position based on config
+  local ui_info = vim.api.nvim_list_uis()[1]
+  local screen_width = ui_info.width
+  local screen_height = ui_info.height
+  
+  local row, col
+  if pconfig.position == "top-right" then
+    row = pconfig.offset_y
+    col = screen_width - width - pconfig.offset_x
+  elseif pconfig.position == "top-left" then
+    row = pconfig.offset_y
+    col = pconfig.offset_x
+  elseif pconfig.position == "bottom-right" then
+    row = screen_height - height - pconfig.offset_y
+    col = screen_width - width - pconfig.offset_x
+  elseif pconfig.position == "bottom-left" then
+    row = screen_height - height - pconfig.offset_y
+    col = pconfig.offset_x
+  else
+    -- Default to top-right
+    row = pconfig.offset_y
+    col = screen_width - width - pconfig.offset_x
+  end
+  
+  local bufnr = vim.api.nvim_create_buf(false, true)
+  
+  local win_config = {
+    relative = "editor",
+    style = "minimal",
+    width = width,
+    height = height,
+    row = row,
+    col = col,
+    border = "rounded",
+    focusable = true,
+  }
+  
+  local win_id = vim.api.nvim_open_win(bufnr, false, win_config)
+  
+  -- Set buffer options
+  vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
+  vim.api.nvim_buf_set_option(bufnr, "buftype", "nofile")
+  vim.api.nvim_buf_set_option(bufnr, "bufhidden", "wipe")
+  vim.api.nvim_buf_set_option(bufnr, "swapfile", false)
+  
+  -- Set window options
+  vim.api.nvim_win_set_option(win_id, "wrap", false)
+  vim.api.nvim_win_set_option(win_id, "cursorline", true)
+  
+  return {
+    bufnr = bufnr,
+    win_id = win_id,
   }
 end
 
@@ -220,6 +286,18 @@ local function set_menu_keybindings()
     "<Cmd>lua require('buffer_manager.ui').toggle_quick_menu()<CR>",
     { silent = true }
   )
+  
+  -- Add main keymap for last buffer navigation
+  if config.main_keymap and config.main_keymap ~= "" then
+    vim.api.nvim_buf_set_keymap(
+      Buffer_manager_bufh,
+      "n",
+      config.main_keymap,
+      "<Cmd>lua require('buffer_manager.ui').nav_to_last_buffer_from_quick()<CR>",
+      { silent = true }
+    )
+  end
+  
   for _, value in pairs(config.select_menu_item_commands) do
     vim.api.nvim_buf_set_keymap(
       Buffer_manager_bufh,
@@ -307,6 +385,27 @@ local function set_win_buf_options(contents, current_buf_line)
     vim.api.nvim_buf_set_option(Buffer_manager_bufh, "bufhidden", "delete")
   end
   vim.cmd(string.format(":call cursor(%d, %d)", current_buf_line, 1))
+end
+
+function M.handle_main_keymap()
+  log.trace("handle_main_keymap()")
+  
+  -- Check if persistent menu is open
+  if Persistent_menu_win_id and vim.api.nvim_win_is_valid(Persistent_menu_win_id) then
+    -- Persistent menu is open, check if it's focused
+    local current_win = vim.api.nvim_get_current_win()
+    if current_win == Persistent_menu_win_id then
+      -- Persistent menu is focused - navigate to last buffer and unfocus
+      M.nav_to_last_buffer_from_persistent()
+    else
+      -- Persistent menu is open but not focused - focus it
+      vim.api.nvim_set_current_win(Persistent_menu_win_id)
+    end
+    return
+  end
+  
+  -- No persistent menu open, open the quick menu
+  M.toggle_quick_menu()
 end
 
 function M.toggle_quick_menu()
@@ -423,6 +522,13 @@ function M.nav_file(id, command)
   if not mark then
     return
   end
+  
+  -- Track current buffer as last accessed before switching
+  local current_buf = vim.api.nvim_get_current_buf()
+  if current_buf ~= mark.buf_id then
+    last_accessed_buffer = current_buf
+  end
+  
   if command == nil or command == "edit" then
     local bufnr = vim.fn.bufnr(mark.filename)
     -- Check if buffer exists by filename
@@ -540,6 +646,216 @@ function M.load_menu_from_file(filename)
   end
   file:close()
   update_buffers()
+end
+
+local function close_persistent_menu()
+  if Persistent_menu_win_id and vim.api.nvim_win_is_valid(Persistent_menu_win_id) then
+    vim.api.nvim_win_close(Persistent_menu_win_id, true)
+  end
+  Persistent_menu_win_id = nil
+  Persistent_menu_bufh = nil
+end
+
+local function set_persistent_menu_keybindings()
+  -- Set up key mappings for selecting buffers
+  local keys = config.line_keys
+  for i = 1, #keys do
+    local key = keys[i]
+    vim.api.nvim_buf_set_keymap(
+      Persistent_menu_bufh,
+      "n",
+      key,
+      string.format(
+        "<Cmd>lua require('buffer_manager.ui').select_persistent_buffer(%d)<CR>",
+        i
+      ),
+      { silent = true }
+    )
+  end
+  
+  -- Add main keymap for last buffer navigation
+  if config.main_keymap and config.main_keymap ~= "" then
+    vim.api.nvim_buf_set_keymap(
+      Persistent_menu_bufh,
+      "n",
+      config.main_keymap,
+      "<Cmd>lua require('buffer_manager.ui').nav_to_last_buffer_from_persistent()<CR>",
+      { silent = true }
+    )
+  end
+  
+  -- Close on escape
+  vim.api.nvim_buf_set_keymap(
+    Persistent_menu_bufh,
+    "n",
+    "<ESC>",
+    "<Cmd>lua require('buffer_manager.ui').toggle_persistent_menu()<CR>",
+    { silent = true }
+  )
+  
+  -- Close on q
+  vim.api.nvim_buf_set_keymap(
+    Persistent_menu_bufh,
+    "n",
+    "q",
+    "<Cmd>lua require('buffer_manager.ui').toggle_persistent_menu()<CR>",
+    { silent = true }
+  )
+end
+
+local function find_main_window()
+  -- Find the main content window (not floating, not our popups)
+  local current_win = vim.api.nvim_get_current_win()
+  local win_config = vim.api.nvim_win_get_config(current_win)
+  
+  -- If current window is not floating, use it
+  if win_config.relative == "" then
+    return current_win
+  end
+  
+  -- Find the first non-floating window
+  for _, win_id in ipairs(vim.api.nvim_list_wins()) do
+    local cfg = vim.api.nvim_win_get_config(win_id)
+    if cfg.relative == "" then
+      return win_id
+    end
+  end
+  
+  -- Fallback to current window
+  return current_win
+end
+
+function M.select_persistent_buffer(idx)
+  log.trace("select_persistent_buffer(): Selecting buffer", idx)
+  
+  local mark = marks[idx]
+  if not mark then
+    return
+  end
+  
+  -- Track current buffer as last accessed before switching
+  local current_buf = vim.api.nvim_get_current_buf()
+  if current_buf ~= mark.buf_id then
+    last_accessed_buffer = current_buf
+  end
+  
+  -- Find the main window to open the buffer in
+  local main_win = find_main_window()
+  
+  -- Switch to the main window first
+  vim.api.nvim_set_current_win(main_win)
+  
+  -- Open the buffer
+  local bufnr = vim.fn.bufnr(mark.filename)
+  if bufnr ~= -1 then
+    vim.cmd("buffer " .. bufnr)
+  else
+    vim.cmd("edit " .. mark.filename)
+  end
+end
+
+function M.nav_to_last_buffer_from_persistent()
+  log.trace("nav_to_last_buffer_from_persistent()")
+  
+  if last_accessed_buffer and vim.api.nvim_buf_is_valid(last_accessed_buffer) then
+    -- Find the main window to open the buffer in
+    local main_win = find_main_window()
+    
+    -- Switch to the main window first
+    vim.api.nvim_set_current_win(main_win)
+    
+    -- Open the last accessed buffer
+    vim.cmd("buffer " .. last_accessed_buffer)
+  else
+    -- No valid last buffer, just unfocus the persistent menu
+    local main_win = find_main_window()
+    vim.api.nvim_set_current_win(main_win)
+  end
+end
+
+function M.nav_to_last_buffer_from_quick()
+  log.trace("nav_to_last_buffer_from_quick()")
+  
+  if last_accessed_buffer and vim.api.nvim_buf_is_valid(last_accessed_buffer) then
+    -- Close the quick menu first
+    close_menu(true)
+    
+    -- Open the last accessed buffer
+    vim.cmd("buffer " .. last_accessed_buffer)
+    update_buffers()
+  else
+    -- No valid last buffer, just close the menu
+    close_menu(true)
+    update_buffers()
+  end
+end
+
+function M.toggle_persistent_menu()
+  log.trace("toggle_persistent_menu()")
+  
+  -- If menu is open, close it
+  if Persistent_menu_win_id and vim.api.nvim_win_is_valid(Persistent_menu_win_id) then
+    close_persistent_menu()
+    return
+  end
+  
+  -- Create the persistent window
+  local win_info = create_persistent_window()
+  Persistent_menu_win_id = win_info.win_id
+  Persistent_menu_bufh = win_info.bufnr
+  
+  -- Update marks to get current buffers
+  update_marks()
+  
+  -- Generate content for persistent menu (filenames only)
+  local contents = {}
+  local extmark_contents = {}
+  
+  for i, mark in pairs(marks) do
+    if i > #config.line_keys then
+      break -- Don't show more buffers than we have keys
+    end
+    
+    local display_filename = mark.filename
+    if not string_starts(display_filename, "term://") then
+      display_filename = utils.get_file_name(mark.filename) -- Just filename, no path
+    else
+      display_filename = utils.get_short_term_name(display_filename)
+    end
+    
+    extmark_contents[i] = { display_filename, "" } -- No path for persistent menu
+    
+    local line_key = config.line_keys[i] or " "
+    contents[i] = "   " .. line_key .. "   " .. display_filename
+  end
+  
+  -- Set buffer content
+  vim.api.nvim_buf_set_option(Persistent_menu_bufh, "modifiable", true)
+  vim.api.nvim_buf_set_lines(Persistent_menu_bufh, 0, -1, false, contents)
+  vim.api.nvim_buf_set_option(Persistent_menu_bufh, "modifiable", false)
+  
+  -- Set up keybindings (only for when the persistent menu is focused)
+  set_persistent_menu_keybindings()
+  
+  -- Show the keys with extmarks  
+  local ns_id = vim.api.nvim_create_namespace("BufferManagerPersistentIndicator")
+  for i = 1, math.min(#marks, #config.line_keys) do
+    local key = config.line_keys[i] or " "
+    vim.api.nvim_buf_set_extmark(Persistent_menu_bufh, ns_id, i - 1, 0, {
+      undo_restore = false,
+      invalidate = true,
+      conceal = "",
+      virt_text = {
+        { "  ", "FloatNormal" },
+        { " " .. key .. " ", "Search" },
+        { "  ", "FloatNormal" },
+        { extmark_contents[i][1] or "", config.hl_filename or "Bold" },
+      },
+      virt_text_pos = "overlay",
+      hl_mode = "combine",
+      cursorline_hl_group = "CursorLine",
+    })
+  end
 end
 
 return M
