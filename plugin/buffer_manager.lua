@@ -19,8 +19,15 @@ end
 -- Set up the keymap after a short delay to ensure config is loaded
 vim.defer_fn(setup_main_keymap, 50)
 
-vim.api.nvim_create_user_command("BufferManagerToggle", function()
+-- Create user commands for both menu types
+vim.api.nvim_create_user_command("BufferManagerTogglePersistent", function()
   require("buffer_manager.ui").toggle_persistent_menu()
 end, {
   desc = "Toggle the persistent buffer manager menu"
+})
+
+vim.api.nvim_create_user_command("BufferManagerToggleQuick", function()
+  require("buffer_manager.ui").toggle_quick_menu()
+end, {
+  desc = "Toggle the quick buffer manager menu"
 })

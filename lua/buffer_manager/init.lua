@@ -103,11 +103,11 @@ function M.setup(config)
     -- Persistent menu configuration
     persistent_menu = {
       enabled = true,
-      width = 50,
+      width = 30,
       height = 15,
       position = "top-right", -- top-left, top-right, bottom-left, bottom-right
-      offset_x = 2,
-      offset_y = 2,
+      offset_x = 0,
+      offset_y = 1,
     },
   }
 
@@ -155,7 +155,7 @@ function M.setup(config)
       and key ~= "l"
       and key ~= "<CR>"
       and key ~= "<Esc>"
-      and key ~= complete_config.main_keymap  -- Filter out main keymap
+      and key ~= complete_config.main_keymap -- Filter out main keymap
   end, complete_config.line_keys)
   for _, command in pairs(complete_config.select_menu_item_commands) do
     if command.key then
