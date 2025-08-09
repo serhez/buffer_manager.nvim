@@ -22,18 +22,27 @@ M.extra_keys = {
   "8",
   "9",
   "a",
+  "b",
   "c",
   "d",
+  "e",
   "f",
+  "g",
+  "h",
   "i",
+  "l",
   "m",
   "n",
   "o",
+  "p",
   "r",
   "s",
   "t",
   "u",
+  "v",
+  "w",
   "x",
+  "y",
   "z",
 }
 
@@ -142,17 +151,8 @@ function M.setup(config)
   -- Remove important keys from line_keys
   complete_config.line_keys = vim.tbl_filter(function(key)
     return key ~= "q"
-      and key ~= "w"
-      and key ~= "e"
-      and key ~= "b"
-      and key ~= "g"
-      and key ~= "v"
-      and key ~= "y"
-      and key ~= "p"
-      and key ~= "h"
       and key ~= "j"
       and key ~= "k"
-      and key ~= "l"
       and key ~= "<CR>"
       and key ~= "<Esc>"
       and key ~= complete_config.main_keymap -- Filter out main keymap

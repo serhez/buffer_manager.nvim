@@ -17,7 +17,6 @@ Persistent_menu_win_id = nil
 Persistent_menu_bufh = nil
 local last_accessed_buffer = nil
 local previous_buffer = nil  -- For alt-tab behavior
-local last_keymap_time = 0   -- Track timing for double keymap detection
 local initial_marks = {}
 local config = buffer_manager.get_config()
 
@@ -197,6 +196,60 @@ local function can_be_deleted(bufname, bufnr)
   )
 end
 
+local function assign_smart_labels(buffers, available_keys)
+  local label_assignment = {}
+  local used_labels = {}
+
+  -- Phase 1: Try to match each buffer to the first alphanumeric (letter or digit)
+  -- character in its filename (ignoring leading dots/underscores and other symbols).
+  -- Examples:
+  --   .env        -> e
+  --   __init__.py -> i
+  --   .123config  -> 1
+  --   foo.lua     -> f
+  for i, mark in ipairs(buffers) do
+    if i > #available_keys then
+      break -- Don't assign more labels than available
+    end
+
+    local filename = utils.get_file_name(mark.filename)
+    -- Find first alphanumeric; pattern [%w] matches [0-9A-Za-z]
+    local first_alnum = filename:match("[%w]")
+
+    if first_alnum then
+      local key_candidate = string.lower(first_alnum)
+      if vim.tbl_contains(available_keys, key_candidate) and not used_labels[key_candidate] then
+        label_assignment[i] = key_candidate
+        used_labels[key_candidate] = true
+      end
+    end
+  end
+
+  -- Phase 2: Assign remaining available labels to buffers without labels
+  local available_label_idx = 1
+  for i, _ in ipairs(buffers) do
+    if i > #available_keys then
+      break -- Don't assign more labels than available
+    end
+
+    if not label_assignment[i] then
+      -- Find next available label
+      while available_label_idx <= #available_keys do
+        local label = available_keys[available_label_idx]
+        available_label_idx = available_label_idx + 1
+
+        if not used_labels[label] then
+          label_assignment[i] = label
+          used_labels[label] = true
+          break
+        end
+      end
+    end
+  end
+
+  return label_assignment
+end
+
 local function is_buffer_in_marks(bufnr)
   for _, mark in pairs(marks) do
     if mark.buf_id == bufnr then
@@ -302,7 +355,7 @@ local function update_marks()
   end
 end
 
-local function set_menu_keybindings()
+local function set_menu_keybindings(smart_labels)
   vim.api.nvim_buf_set_keymap(
     Buffer_manager_bufh,
     "n",
@@ -357,21 +410,40 @@ local function set_menu_keybindings()
       Buffer_manager_bufh
     )
   )
-  -- Go to file hitting its line number
-  local keys = config.line_keys
-  for i = 1, #keys do
-    local c = keys[i]
-    vim.api.nvim_buf_set_keymap(
-      Buffer_manager_bufh,
-      "n",
-      c,
-      string.format(
-        "<Cmd>%s <bar> lua require('buffer_manager.ui')"
-          .. ".select_menu_item()<CR>",
-        i
-      ),
-      {}
-    )
+  -- Go to file hitting its line number or smart label
+  if smart_labels then
+    for i, label in pairs(smart_labels) do
+      if label and label ~= " " then
+        vim.api.nvim_buf_set_keymap(
+          Buffer_manager_bufh,
+          "n",
+          label,
+          string.format(
+            "<Cmd>%s <bar> lua require('buffer_manager.ui')"
+              .. ".select_menu_item()<CR>",
+            i
+          ),
+          {}
+        )
+      end
+    end
+  else
+    -- Fallback to original behavior
+    local keys = config.line_keys
+    for i = 1, #keys do
+      local c = keys[i]
+      vim.api.nvim_buf_set_keymap(
+        Buffer_manager_bufh,
+        "n",
+        c,
+        string.format(
+          "<Cmd>%s <bar> lua require('buffer_manager.ui')"
+            .. ".select_menu_item()<CR>",
+          i
+        ),
+        {}
+      )
+    end
   end
 end
 
@@ -474,46 +546,62 @@ function M.toggle_quick_menu()
   -- set initial_marks
   local current_buf_line = 1
   local line = 1
+  local valid_marks = {}
+  
+  -- First, collect all valid marks
   for idx, mark in pairs(marks) do
     -- Add buffer only if it does not already exist
     if vim.fn.buflisted(mark.buf_id) ~= 1 then
       marks[idx] = nil
     else
-      local current_mark = marks[idx]
+      table.insert(valid_marks, {
+        mark = marks[idx],
+        original_idx = idx
+      })
       initial_marks[idx] = {
-        filename = current_mark.filename,
-        buf_id = current_mark.buf_id,
+        filename = marks[idx].filename,
+        buf_id = marks[idx].buf_id,
       }
-      if current_mark.buf_id == current_buf_id then
-        current_buf_line = line
-      end
-      local display_filename = current_mark.filename
-      local display_path = ""
-      if not string_starts(display_filename, "term://") then
-        display_filename, display_path =
-          utils.get_short_file_name(config, display_filename)
-      else
-        display_filename = utils.get_short_term_name(display_filename)
-      end
-      extmark_contents[line] = { display_filename, display_path }
-
-      local line_key = config.line_keys[line] or " "
-      contents[line] = "   "
-        .. line_key
-        .. "   "
-        .. display_filename
-        .. display_path
-      line = line + 1
     end
+  end
+  
+  -- Generate smart label assignments
+  local smart_labels = assign_smart_labels(
+    vim.tbl_map(function(item) return item.mark end, valid_marks),
+    config.line_keys
+  )
+  
+  for i, item in ipairs(valid_marks) do
+    local current_mark = item.mark
+    if current_mark.buf_id == current_buf_id then
+      current_buf_line = line
+    end
+    local display_filename = current_mark.filename
+    local display_path = ""
+    if not string_starts(display_filename, "term://") then
+      display_filename, display_path =
+        utils.get_short_file_name(config, display_filename)
+    else
+      display_filename = utils.get_short_term_name(display_filename)
+    end
+    extmark_contents[line] = { display_filename, display_path }
+
+    local line_key = smart_labels[i] or " "
+    contents[line] = "   "
+      .. line_key
+      .. "   "
+      .. display_filename
+      .. display_path
+    line = line + 1
   end
 
   set_win_buf_options(contents, current_buf_line)
-  set_menu_keybindings()
+  set_menu_keybindings(smart_labels)
 
   -- Show the keys with extmarks
   local ns_id = vim.api.nvim_create_namespace("BufferManagerIndicator")
-  for i = 1, #marks do
-    local key = config.line_keys[i] or " "
+  for i = 1, #valid_marks do
+    local key = smart_labels[i] or " "
     vim.api.nvim_buf_set_extmark(Buffer_manager_bufh, ns_id, i - 1, 0, {
       undo_restore = false,
       invalidate = true,
@@ -668,21 +756,39 @@ local function close_persistent_menu()
   Persistent_menu_bufh = nil
 end
 
-local function set_persistent_menu_keybindings()
+local function set_persistent_menu_keybindings(smart_labels)
   -- Set up key mappings for selecting buffers
-  local keys = config.line_keys
-  for i = 1, #keys do
-    local key = keys[i]
-    vim.api.nvim_buf_set_keymap(
-      Persistent_menu_bufh,
-      "n",
-      key,
-      string.format(
-        "<Cmd>lua require('buffer_manager.ui').select_persistent_buffer(%d)<CR>",
-        i
-      ),
-      { silent = true }
-    )
+  if smart_labels then
+    for i, label in pairs(smart_labels) do
+      if label and label ~= " " then
+        vim.api.nvim_buf_set_keymap(
+          Persistent_menu_bufh,
+          "n",
+          label,
+          string.format(
+            "<Cmd>lua require('buffer_manager.ui').select_persistent_buffer(%d)<CR>",
+            i
+          ),
+          { silent = true }
+        )
+      end
+    end
+  else
+    -- Fallback to original behavior
+    local keys = config.line_keys
+    for i = 1, #keys do
+      local key = keys[i]
+      vim.api.nvim_buf_set_keymap(
+        Persistent_menu_bufh,
+        "n",
+        key,
+        string.format(
+          "<Cmd>lua require('buffer_manager.ui').select_persistent_buffer(%d)<CR>",
+          i
+        ),
+        { silent = true }
+      )
+    end
   end
 
   -- Add Enter key support (same as quick menu)
@@ -816,6 +922,18 @@ function M.nav_to_last_buffer_from_persistent()
   log.trace("nav_to_last_buffer_from_persistent()")
 
   local target_buffer = get_alt_tab_buffer()
+  local current_buf = vim.api.nvim_get_current_buf()
+
+  -- If the alt-tab target is the same as current buffer, select the next buffer in the list
+  if not target_buffer or target_buffer == current_buf then
+    -- Find the first buffer in marks that's different from current
+    for _, mark in pairs(marks) do
+      if mark.buf_id ~= current_buf and vim.api.nvim_buf_is_valid(mark.buf_id) then
+        target_buffer = mark.buf_id
+        break
+      end
+    end
+  end
 
   if target_buffer then
     -- Track the switch
@@ -880,12 +998,21 @@ function M.toggle_persistent_menu()
   -- Generate content for persistent menu (filenames only)
   local contents = {}
   local extmark_contents = {}
+  local valid_marks = {}
 
+  -- Collect valid marks
   for i, mark in pairs(marks) do
-    if i > #config.line_keys then
+    if i <= #config.line_keys then
+      table.insert(valid_marks, mark)
+    else
       break -- Don't show more buffers than we have keys
     end
+  end
+  
+  -- Generate smart label assignments for persistent menu
+  local smart_labels = assign_smart_labels(valid_marks, config.line_keys)
 
+  for i, mark in ipairs(valid_marks) do
     local display_filename = mark.filename
     if not string_starts(display_filename, "term://") then
       display_filename = utils.get_file_name(mark.filename) -- Just filename, no path
@@ -895,7 +1022,7 @@ function M.toggle_persistent_menu()
 
     extmark_contents[i] = { display_filename, "" } -- No path for persistent menu
 
-    local line_key = config.line_keys[i] or " "
+    local line_key = smart_labels[i] or " "
     contents[i] = "   " .. line_key .. "   " .. display_filename
   end
 
@@ -905,13 +1032,13 @@ function M.toggle_persistent_menu()
   vim.api.nvim_buf_set_option(Persistent_menu_bufh, "modifiable", false)
 
   -- Set up keybindings (only for when the persistent menu is focused)
-  set_persistent_menu_keybindings()
+  set_persistent_menu_keybindings(smart_labels)
 
   -- Show the keys with extmarks
   local ns_id =
     vim.api.nvim_create_namespace("BufferManagerPersistentIndicator")
-  for i = 1, math.min(#marks, #config.line_keys) do
-    local key = config.line_keys[i] or " "
+  for i = 1, #valid_marks do
+    local key = smart_labels[i] or " "
     vim.api.nvim_buf_set_extmark(Persistent_menu_bufh, ns_id, i - 1, 0, {
       undo_restore = false,
       invalidate = true,
