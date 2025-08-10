@@ -21,6 +21,37 @@ local last_editor_win = nil  -- Last non-menu editor window used for opening buf
 local initial_marks = {}
 local config = buffer_manager.get_config()
 
+-- Helper to apply horizontal movement restrictions without overriding active label keys
+local function apply_horizontal_restrictions(bufnr, winid, active_labels)
+  if not (bufnr and vim.api.nvim_buf_is_valid(bufnr)) then return end
+  active_labels = active_labels or {}
+  -- Candidate motion keys that could move horizontally or jump within line
+  local candidates = { 'h','l','0','$','<Left>','<Right>','w','e','b','f','t','F','T','W','E','B' }
+  for _, key in ipairs(candidates) do
+    local plain = key:gsub('[<>]', '')
+    if #plain == 1 and active_labels[plain] then
+      -- Skip suppression to preserve label mapping
+    else
+      pcall(vim.api.nvim_buf_set_keymap, bufnr, 'n', key, '<Nop>', { silent = true })
+    end
+  end
+  -- Lock cursor to column 1 (only create one autocmd per buffer)
+  local ok, existing = pcall(vim.api.nvim_buf_get_var, bufnr, 'buffer_manager_lock_col')
+  if not (ok and existing) then
+    pcall(vim.api.nvim_buf_set_var, bufnr, 'buffer_manager_lock_col', true)
+    vim.api.nvim_create_autocmd('CursorMoved', {
+      buffer = bufnr,
+      callback = function()
+        if winid and vim.api.nvim_win_is_valid(winid) then
+          local line = vim.api.nvim_win_get_cursor(winid)[1]
+          vim.api.nvim_win_set_cursor(winid, { line, 1 })
+        end
+      end,
+      desc = 'Keep cursor in column 1 for buffer_manager menu'
+    })
+  end
+end
+
 -- Buffer tracking functions
 local function is_menu_buffer(bufnr)
   if not bufnr or bufnr < 1 then return false end
@@ -665,21 +696,14 @@ function M.toggle_quick_menu(adaptive_height)
   set_win_buf_options(contents, current_buf_line)
   set_menu_keybindings(smart_labels)
 
-  -- Prevent horizontal movement: keep cursor at column 1
-  vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', 'h', '<Nop>', { silent = true })
-  vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', 'l', '<Nop>', { silent = true })
-  vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '<Left>', '<Nop>', { silent = true })
-  vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '<Right>', '<Nop>', { silent = true })
-  vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '0', '<Nop>', { silent = true })
-  vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '$', '<Nop>', { silent = true })
-  vim.api.nvim_create_autocmd('CursorMoved', {
-    buffer = Buffer_manager_bufh,
-    callback = function()
-      local line = vim.api.nvim_win_get_cursor(Buffer_manager_win_id)[1]
-      vim.api.nvim_win_set_cursor(Buffer_manager_win_id, { line, 1 })
-    end,
-    desc = 'Keep cursor in column 1 for buffer_manager quick menu'
-  })
+  -- Apply horizontal movement restrictions (after keybindings so labels are preserved)
+  local active_labels_set = {}
+  if smart_labels then
+    for _, lbl in pairs(smart_labels) do if lbl and lbl ~= ' ' then active_labels_set[lbl] = true end end
+  else
+    for _, lbl in ipairs(config.line_keys) do active_labels_set[lbl] = true end
+  end
+  apply_horizontal_restrictions(Buffer_manager_bufh, Buffer_manager_win_id, active_labels_set)
 
   -- Show the keys with extmarks
   local ns_id = vim.api.nvim_create_namespace("BufferManagerIndicator")
@@ -1171,23 +1195,14 @@ function M.toggle_persistent_menu(adaptive_height)
   -- Set up keybindings (only for when the persistent menu is focused)
   set_persistent_menu_keybindings(smart_labels)
 
-  -- Prevent horizontal movement in persistent menu
-  vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', 'h', '<Nop>', { silent = true })
-  vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', 'l', '<Nop>', { silent = true })
-  vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '<Left>', '<Nop>', { silent = true })
-  vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '<Right>', '<Nop>', { silent = true })
-  vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '0', '<Nop>', { silent = true })
-  vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '$', '<Nop>', { silent = true })
-  vim.api.nvim_create_autocmd('CursorMoved', {
-    buffer = Persistent_menu_bufh,
-    callback = function()
-      if Persistent_menu_win_id and vim.api.nvim_win_is_valid(Persistent_menu_win_id) then
-        local line = vim.api.nvim_win_get_cursor(Persistent_menu_win_id)[1]
-        vim.api.nvim_win_set_cursor(Persistent_menu_win_id, { line, 1 })
-      end
-    end,
-    desc = 'Keep cursor in column 1 for buffer_manager persistent menu'
-  })
+  -- Apply horizontal restrictions (respect active labels)
+  local active_labels_set = {}
+  if smart_labels then
+    for _, lbl in pairs(smart_labels) do if lbl and lbl ~= ' ' then active_labels_set[lbl] = true end end
+  else
+    for _, lbl in ipairs(config.line_keys) do active_labels_set[lbl] = true end
+  end
+  apply_horizontal_restrictions(Persistent_menu_bufh, Persistent_menu_win_id, active_labels_set)
 
   -- Show the keys with extmarks
   local ns_id =
@@ -1301,13 +1316,14 @@ function M.refresh_persistent_menu()
       end
       -- Reapply keymaps (buffer was reused; clear existing maps could be done, but re-setting is fine)
       set_persistent_menu_keybindings(smart_labels)
-      -- Reapply horizontal movement prevention
-      vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', 'h', '<Nop>', { silent = true })
-      vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', 'l', '<Nop>', { silent = true })
-      vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '<Left>', '<Nop>', { silent = true })
-      vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '<Right>', '<Nop>', { silent = true })
-      vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '0', '<Nop>', { silent = true })
-      vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '$', '<Nop>', { silent = true })
+      -- Reapply horizontal movement restrictions respecting active labels
+      local active_labels_set = {}
+      if smart_labels then
+        for _, lbl in pairs(smart_labels) do if lbl and lbl ~= ' ' then active_labels_set[lbl] = true end end
+      else
+        for _, lbl in ipairs(config.line_keys) do active_labels_set[lbl] = true end
+      end
+      apply_horizontal_restrictions(Persistent_menu_bufh, Persistent_menu_win_id, active_labels_set)
     end
   end)
   _refreshing = false
@@ -1404,13 +1420,14 @@ function M.refresh_quick_menu_if_open()
 
     -- Reapply keymaps
     set_menu_keybindings(smart_labels)
-    -- Reapply horizontal movement prevention
-    vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', 'h', '<Nop>', { silent = true })
-    vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', 'l', '<Nop>', { silent = true })
-    vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '<Left>', '<Nop>', { silent = true })
-    vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '<Right>', '<Nop>', { silent = true })
-    vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '0', '<Nop>', { silent = true })
-    vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '$', '<Nop>', { silent = true })
+    -- Reapply horizontal movement restrictions respecting active labels
+    local active_labels_set = {}
+    if smart_labels then
+      for _, lbl in pairs(smart_labels) do if lbl and lbl ~= ' ' then active_labels_set[lbl] = true end end
+    else
+      for _, lbl in ipairs(config.line_keys) do active_labels_set[lbl] = true end
+    end
+    apply_horizontal_restrictions(Buffer_manager_bufh, Buffer_manager_win_id, active_labels_set)
   end)
   _refreshing = false
 end
