@@ -665,6 +665,22 @@ function M.toggle_quick_menu(adaptive_height)
   set_win_buf_options(contents, current_buf_line)
   set_menu_keybindings(smart_labels)
 
+  -- Prevent horizontal movement: keep cursor at column 1
+  vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', 'h', '<Nop>', { silent = true })
+  vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', 'l', '<Nop>', { silent = true })
+  vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '<Left>', '<Nop>', { silent = true })
+  vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '<Right>', '<Nop>', { silent = true })
+  vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '0', '<Nop>', { silent = true })
+  vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '$', '<Nop>', { silent = true })
+  vim.api.nvim_create_autocmd('CursorMoved', {
+    buffer = Buffer_manager_bufh,
+    callback = function()
+      local line = vim.api.nvim_win_get_cursor(Buffer_manager_win_id)[1]
+      vim.api.nvim_win_set_cursor(Buffer_manager_win_id, { line, 1 })
+    end,
+    desc = 'Keep cursor in column 1 for buffer_manager quick menu'
+  })
+
   -- Show the keys with extmarks
   local ns_id = vim.api.nvim_create_namespace("BufferManagerIndicator")
   for i = 1, #valid_marks do
@@ -1155,6 +1171,24 @@ function M.toggle_persistent_menu(adaptive_height)
   -- Set up keybindings (only for when the persistent menu is focused)
   set_persistent_menu_keybindings(smart_labels)
 
+  -- Prevent horizontal movement in persistent menu
+  vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', 'h', '<Nop>', { silent = true })
+  vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', 'l', '<Nop>', { silent = true })
+  vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '<Left>', '<Nop>', { silent = true })
+  vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '<Right>', '<Nop>', { silent = true })
+  vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '0', '<Nop>', { silent = true })
+  vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '$', '<Nop>', { silent = true })
+  vim.api.nvim_create_autocmd('CursorMoved', {
+    buffer = Persistent_menu_bufh,
+    callback = function()
+      if Persistent_menu_win_id and vim.api.nvim_win_is_valid(Persistent_menu_win_id) then
+        local line = vim.api.nvim_win_get_cursor(Persistent_menu_win_id)[1]
+        vim.api.nvim_win_set_cursor(Persistent_menu_win_id, { line, 1 })
+      end
+    end,
+    desc = 'Keep cursor in column 1 for buffer_manager persistent menu'
+  })
+
   -- Show the keys with extmarks
   local ns_id =
     vim.api.nvim_create_namespace("BufferManagerPersistentIndicator")
@@ -1267,6 +1301,13 @@ function M.refresh_persistent_menu()
       end
       -- Reapply keymaps (buffer was reused; clear existing maps could be done, but re-setting is fine)
       set_persistent_menu_keybindings(smart_labels)
+      -- Reapply horizontal movement prevention
+      vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', 'h', '<Nop>', { silent = true })
+      vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', 'l', '<Nop>', { silent = true })
+      vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '<Left>', '<Nop>', { silent = true })
+      vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '<Right>', '<Nop>', { silent = true })
+      vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '0', '<Nop>', { silent = true })
+      vim.api.nvim_buf_set_keymap(Persistent_menu_bufh, 'n', '$', '<Nop>', { silent = true })
     end
   end)
   _refreshing = false
@@ -1363,6 +1404,13 @@ function M.refresh_quick_menu_if_open()
 
     -- Reapply keymaps
     set_menu_keybindings(smart_labels)
+    -- Reapply horizontal movement prevention
+    vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', 'h', '<Nop>', { silent = true })
+    vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', 'l', '<Nop>', { silent = true })
+    vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '<Left>', '<Nop>', { silent = true })
+    vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '<Right>', '<Nop>', { silent = true })
+    vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '0', '<Nop>', { silent = true })
+    vim.api.nvim_buf_set_keymap(Buffer_manager_bufh, 'n', '$', '<Nop>', { silent = true })
   end)
   _refreshing = false
 end
