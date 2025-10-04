@@ -1,11 +1,7 @@
-local Path = require("plenary.path")
 local buffer_manager = require("buffer_manager")
 local utils = require("buffer_manager.utils")
 local log = require("buffer_manager.dev").log
 local marks = require("buffer_manager").marks
-
-local version_info = vim.inspect(vim.version())
-local version_minor = tonumber(version_info:match("minor = (%d+)"))
 
 local M = {}
 
@@ -14,53 +10,49 @@ Buffer_manager_win_id = nil
 Buffer_manager_bufh = nil
 local last_editor_win = nil
 local config = buffer_manager.get_config()
-local is_expanded = false -- Tracks whether menu shows labels or just dashes
-local selection_mode_keymaps = {} -- Store global keymaps for selection mode
+local is_expanded = false
+local selection_mode_keymaps = {}
 
--- Set up highlight group for transparent background with visible foreground
+-- Set up highlight group for transparent background
 vim.api.nvim_set_hl(0, "BufferManagerNormal", { bg = "NONE", fg = "NONE" })
 
--- Helper to check if buffer is visible in current tab
+-- Check if buffer is visible in current tab
 local function is_buffer_visible_in_tab(buf_id)
   for _, win_id in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    if vim.api.nvim_win_is_valid(win_id) then
-      local win_buf = vim.api.nvim_win_get_buf(win_id)
-      if win_buf == buf_id then
-        return true
-      end
+    if
+      vim.api.nvim_win_is_valid(win_id)
+      and vim.api.nvim_win_get_buf(win_id) == buf_id
+    then
+      return true
     end
   end
   return false
 end
 
--- Get the last accessed buffer that is not currently visible in any window of the current tab
+-- Get the last accessed buffer not currently visible
 local function get_last_accessed_buffer()
-  -- Get all buffers sorted by lastused time
   local sorted_buffers = {}
   for _, mark in ipairs(marks) do
     if vim.api.nvim_buf_is_valid(mark.buf_id) then
       local buf_info = vim.fn.getbufinfo(mark.buf_id)[1]
       if buf_info then
-        table.insert(sorted_buffers, {
-          buf_id = mark.buf_id,
-          lastused = buf_info.lastused,
-        })
+        table.insert(
+          sorted_buffers,
+          { buf_id = mark.buf_id, lastused = buf_info.lastused }
+        )
       end
     end
   end
 
-  -- Sort by lastused (most recent first)
   table.sort(sorted_buffers, function(a, b)
     return a.lastused > b.lastused
   end)
 
-  -- Find the first buffer that is not visible in the current tab
   for _, buf_info in ipairs(sorted_buffers) do
     if not is_buffer_visible_in_tab(buf_info.buf_id) then
       return buf_info.buf_id
     end
   end
-
   return nil
 end
 
@@ -74,25 +66,14 @@ local function get_buffer_index(buf_id)
   return nil
 end
 
--- Helper to check if buffer is a menu buffer
-local function is_menu_buffer(bufnr)
-  if not bufnr or bufnr < 1 then
-    return false
-  end
-  local ok, val = pcall(vim.api.nvim_buf_get_var, bufnr, "buffer_manager_menu")
-  return ok and val == true
-end
-
 -- Find main content window (non-floating)
 local function find_main_window()
   local current_win = vim.api.nvim_get_current_win()
-  local win_config = vim.api.nvim_win_get_config(current_win)
-  if win_config.relative == "" then
+  if vim.api.nvim_win_get_config(current_win).relative == "" then
     return current_win
   end
   for _, win_id in ipairs(vim.api.nvim_list_wins()) do
-    local cfg = vim.api.nvim_win_get_config(win_id)
-    if cfg.relative == "" then
+    if vim.api.nvim_win_get_config(win_id).relative == "" then
       return win_id
     end
   end
@@ -103,13 +84,12 @@ end
 local function update_marks()
   -- Remove invalid buffers
   for idx = #marks, 1, -1 do
-    local mark = marks[idx]
-    if not utils.buffer_is_valid(mark.buf_id, mark.filename) then
+    if not utils.buffer_is_valid(marks[idx].buf_id, marks[idx].filename) then
       table.remove(marks, idx)
     end
   end
 
-  -- Check if any buffer has been added
+  -- Add new buffers
   for _, buf in pairs(vim.api.nvim_list_bufs()) do
     local bufname = vim.api.nvim_buf_get_name(buf)
     if utils.buffer_is_valid(buf, bufname) then
@@ -121,73 +101,59 @@ local function update_marks()
         end
       end
       if not found then
-        table.insert(marks, {
-          filename = bufname,
-          buf_id = buf,
-        })
+        table.insert(marks, { filename = bufname, buf_id = buf })
       end
     end
   end
-
-  -- No re-ordering - buffers stay in the order they were added
 end
 
 -- Assign smart labels to buffers
 local function assign_smart_labels(buffers, available_keys)
   local label_assignment = {}
   local used_labels = {}
-
-  -- Special: Assign ";" to the last accessed buffer
   local last_accessed_buf = get_last_accessed_buffer()
-  local last_accessed_idx = nil
 
+  -- Assign ";" to last accessed buffer
   if last_accessed_buf then
     for i, mark in ipairs(buffers) do
       if mark.buf_id == last_accessed_buf then
         label_assignment[i] = ";"
         used_labels[";"] = true
-        last_accessed_idx = i
         break
       end
     end
   end
 
-  -- Phase 1: Try to match first alphanumeric character
+  -- Try to match first alphanumeric character
   for i, mark in ipairs(buffers) do
-    if i > #available_keys then
-      break
-    end
-    if i == last_accessed_idx then
-      -- Skip, already assigned ";"
+    if label_assignment[i] or i > #available_keys then
       goto continue
     end
-    local filename = utils.get_file_name(mark.filename)
-    local first_alnum = filename:match("[%w]")
+
+    local first_alnum = utils.get_file_name(mark.filename):match("[%w]")
     if first_alnum then
-      local key_candidate = string.lower(first_alnum)
-      if
-        vim.tbl_contains(available_keys, key_candidate)
-        and not used_labels[key_candidate]
-      then
-        label_assignment[i] = key_candidate
-        used_labels[key_candidate] = true
+      local key = string.lower(first_alnum)
+      if vim.tbl_contains(available_keys, key) and not used_labels[key] then
+        label_assignment[i] = key
+        used_labels[key] = true
       end
     end
     ::continue::
   end
 
-  -- Phase 2: Fill remaining with available keys
-  local available_label_idx = 1
+  -- Fill remaining with available keys
+  local key_idx = 1
   for i = 1, math.min(#buffers, #available_keys) do
     if not label_assignment[i] then
-      while available_label_idx <= #available_keys do
-        local label = available_keys[available_label_idx]
-        available_label_idx = available_label_idx + 1
-        if not used_labels[label] then
-          label_assignment[i] = label
-          used_labels[label] = true
-          break
-        end
+      while
+        key_idx <= #available_keys and used_labels[available_keys[key_idx]]
+      do
+        key_idx = key_idx + 1
+      end
+      if key_idx <= #available_keys then
+        label_assignment[i] = available_keys[key_idx]
+        used_labels[available_keys[key_idx]] = true
+        key_idx = key_idx + 1
       end
     end
   end
@@ -196,24 +162,13 @@ local function assign_smart_labels(buffers, available_keys)
 end
 
 -- Create the transparent floating window
-local function create_window(actual_height, actual_width)
-  log.trace("create_window()")
-
-  local width = actual_width or 4 -- Default to dash width
-  local height = actual_height or 1
-
-  -- Calculate position (middle-right, aligned to screen edge)
-  local ui_info = vim.api.nvim_list_uis()[1]
-  local screen_width = ui_info.width
-  local screen_height = ui_info.height
-
-  local row = math.floor((screen_height - height) / 2) + (config.offset_y or 0)
-  local col = screen_width - width + 1 -- Extend to the actual last column
+local function create_window(height, width)
+  local ui = vim.api.nvim_list_uis()[1]
+  local row = math.floor((ui.height - height) / 2) + (config.offset_y or 0)
+  local col = ui.width - width + 1
 
   local bufnr = vim.api.nvim_create_buf(false, true)
-  pcall(vim.api.nvim_buf_set_var, bufnr, "buffer_manager_menu", true)
-
-  local win_config = {
+  local win_id = vim.api.nvim_open_win(bufnr, false, {
     relative = "editor",
     style = "minimal",
     width = width,
@@ -221,35 +176,22 @@ local function create_window(actual_height, actual_width)
     row = row,
     col = col,
     border = "none",
-    focusable = false, -- Make window non-focusable
-  }
+    focusable = false,
+  })
 
-  local win_id = vim.api.nvim_open_win(bufnr, false, win_config)
-
-  -- Set buffer options
   vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
   vim.api.nvim_buf_set_option(bufnr, "buftype", "nofile")
   vim.api.nvim_buf_set_option(bufnr, "bufhidden", "wipe")
   vim.api.nvim_buf_set_option(bufnr, "swapfile", false)
-
-  -- Set window options for transparency
   vim.api.nvim_win_set_option(win_id, "wrap", false)
-  vim.api.nvim_win_set_option(win_id, "cursorline", false)
-  vim.api.nvim_win_set_option(win_id, "number", false)
-  vim.api.nvim_win_set_option(win_id, "relativenumber", false)
-  vim.api.nvim_win_set_option(win_id, "winblend", 0) -- No blending - use winhighlight for transparency
-
-  -- Make background transparent while keeping foreground colors
+  vim.api.nvim_win_set_option(win_id, "winblend", 0)
   vim.api.nvim_win_set_option(
     win_id,
     "winhighlight",
     "Normal:BufferManagerNormal"
   )
 
-  return {
-    bufnr = bufnr,
-    win_id = win_id,
-  }
+  return { bufnr = bufnr, win_id = win_id }
 end
 
 -- Update window size dynamically
@@ -261,35 +203,27 @@ local function update_window_size(width, height)
     return
   end
 
-  local ui_info = vim.api.nvim_list_uis()[1]
-  local screen_width = ui_info.width
-  local screen_height = ui_info.height
+  local ui = vim.api.nvim_list_uis()[1]
+  local row = math.floor((ui.height - height) / 2) + (config.offset_y or 0)
+  local col = ui.width - width + 1
 
-  local row = math.floor((screen_height - height) / 2) + (config.offset_y or 0)
-  local col = screen_width - width + 1 -- Extend to the actual last column
-
-  local win_config = {
+  pcall(vim.api.nvim_win_set_config, Buffer_manager_win_id, {
     relative = "editor",
-    style = "minimal",
     width = width,
     height = height,
     row = row,
     col = col,
-    border = "none",
-    focusable = false,
-  }
-
-  pcall(vim.api.nvim_win_set_config, Buffer_manager_win_id, win_config)
+  })
 end
 
 -- Check if buffer is active (visible in any window)
 local function is_buffer_active(buf_id)
   for _, win_id in ipairs(vim.api.nvim_list_wins()) do
-    if vim.api.nvim_win_is_valid(win_id) then
-      local win_buf = vim.api.nvim_win_get_buf(win_id)
-      if win_buf == buf_id then
-        return true
-      end
+    if
+      vim.api.nvim_win_is_valid(win_id)
+      and vim.api.nvim_win_get_buf(win_id) == buf_id
+    then
+      return true
     end
   end
   return false
@@ -297,54 +231,40 @@ end
 
 -- Check if buffer is the current buffer in the last editor window
 local function is_current_buffer(buf_id)
-  if last_editor_win and vim.api.nvim_win_is_valid(last_editor_win) then
-    local current_buf = vim.api.nvim_win_get_buf(last_editor_win)
-    return current_buf == buf_id
-  end
-  return false
+  return last_editor_win
+    and vim.api.nvim_win_is_valid(last_editor_win)
+    and vim.api.nvim_win_get_buf(last_editor_win) == buf_id
 end
 
 -- Generate dash line for a buffer
 local function generate_dash_line(buf_id)
-  if is_buffer_active(buf_id) then
-    return (config.dash_char .. config.dash_char) or "--"
-  else
-    return (" " .. config.dash_char) or " -"
-  end
+  return is_buffer_active(buf_id) and (config.dash_char:rep(2))
+    or (" " .. config.dash_char)
 end
 
 -- Clear all selection mode keymaps
 local function clear_selection_keymaps()
-  for _, keymap_id in ipairs(selection_mode_keymaps) do
-    pcall(vim.keymap.del, "n", keymap_id)
+  for _, key in ipairs(selection_mode_keymaps) do
+    pcall(vim.keymap.del, "n", key)
   end
   selection_mode_keymaps = {}
 end
 
 -- Set global keybindings for selection mode (expanded state)
 local function set_selection_keybindings(smart_labels)
-  -- Clear any existing selection keymaps first
   clear_selection_keymaps()
 
-  -- Label keys for selection
-  if smart_labels then
-    for i, label in pairs(smart_labels) do
-      if label and label ~= " " then
-        -- Don't override the main keymap (";") - let it handle both expand and select
-        if label ~= config.main_keymap then
-          vim.keymap.set("n", label, function()
-            require("buffer_manager.ui").select_buffer(i)
-          end, {
-            silent = true,
-            desc = "Buffer Manager: Select buffer " .. i,
-          })
-          table.insert(selection_mode_keymaps, label)
-        end
-      end
+  for i, label in pairs(smart_labels) do
+    -- Don't override the main keymap (";")
+    if label and label ~= " " and label ~= config.main_keymap then
+      vim.keymap.set("n", label, function()
+        require("buffer_manager.ui").select_buffer(i)
+      end, { silent = true, desc = "Buffer Manager: Select buffer " .. i })
+      table.insert(selection_mode_keymaps, label)
     end
   end
 
-  -- ESC to collapse back to dashes
+  -- ESC to collapse
   vim.keymap.set("n", "<ESC>", function()
     require("buffer_manager.ui").collapse_menu()
   end, { silent = true, desc = "Buffer Manager: Collapse menu" })
@@ -611,19 +531,18 @@ end
 
 -- Select buffer by index
 function M.select_buffer(idx)
-  log.trace("select_buffer(): Selecting buffer", idx)
-
   local mark = marks[idx]
-  if not mark then
-    return
-  end
+  if not mark then return end
 
-  -- Get target window
-  local target_win = (
-    last_editor_win and vim.api.nvim_win_is_valid(last_editor_win)
-  )
-      and last_editor_win
-    or find_main_window()
+  -- Use the current window (which should be the window that had focus when menu was opened)
+  local target_win = vim.api.nvim_get_current_win()
+  
+  -- If somehow we're in a floating window, find a real window
+  if vim.api.nvim_win_get_config(target_win).relative ~= "" then
+    target_win = last_editor_win and vim.api.nvim_win_is_valid(last_editor_win) 
+      and last_editor_win 
+      or find_main_window()
+  end
 
   vim.api.nvim_set_current_win(target_win)
 
@@ -640,59 +559,20 @@ function M.select_buffer(idx)
   render_collapsed()
 end
 
--- Select buffer on current line
-function M.select_current_line(command)
-  local idx = vim.fn.line(".")
-  local mark = marks[idx]
-
-  if not mark then
-    return
-  end
-
-  local target_win = (
-    last_editor_win and vim.api.nvim_win_is_valid(last_editor_win)
-  )
-      and last_editor_win
-    or find_main_window()
-
-  vim.api.nvim_set_current_win(target_win)
-
-  if command == nil or command == "edit" then
-    local bufnr = vim.fn.bufnr(mark.filename)
-    if bufnr ~= -1 then
-      vim.cmd("buffer " .. bufnr)
-    else
-      vim.cmd("edit " .. mark.filename)
-    end
-  else
-    vim.cmd(command .. " " .. mark.filename)
-  end
-
-  -- Collapse back to dashes
-  is_expanded = false
-  render_collapsed()
-end
-
 -- Handle main keymap press
 function M.handle_main_keymap()
-  log.trace("handle_main_keymap()")
-
   if
     Buffer_manager_win_id and vim.api.nvim_win_is_valid(Buffer_manager_win_id)
   then
-    -- Menu exists
     if is_expanded then
       -- Menu is expanded - pressing ";" again switches to last accessed buffer
       local last_buf = get_last_accessed_buffer()
       if last_buf then
-        -- Find the index of this buffer in marks
         local buf_idx = get_buffer_index(last_buf)
         if buf_idx then
-          -- Use select_buffer to switch and collapse
           M.select_buffer(buf_idx)
         end
       end
-      -- If no last accessed buffer found, do nothing (stay expanded)
     else
       -- Menu is collapsed - expand it
       M.expand_menu()
@@ -700,84 +580,6 @@ function M.handle_main_keymap()
   else
     -- No menu open - create one
     M.toggle_menu()
-  end
-end
-
--- Navigation functions (for compatibility)
-function M.nav_file(id, command)
-  log.trace("nav_file(): Navigating to", id)
-  update_marks()
-
-  local mark = marks[id]
-  if not mark then
-    return
-  end
-
-  if command == nil or command == "edit" then
-    local bufnr = vim.fn.bufnr(mark.filename)
-    if bufnr ~= -1 then
-      vim.cmd("buffer " .. bufnr)
-    else
-      vim.cmd("edit " .. mark.filename)
-    end
-  else
-    vim.cmd(command .. " " .. mark.filename)
-  end
-end
-
-function M.nav_next()
-  log.trace("nav_next()")
-  update_marks()
-
-  local current_buf = vim.fn.bufnr()
-  local current_idx = nil
-
-  for idx, mark in ipairs(marks) do
-    if mark.buf_id == current_buf then
-      current_idx = idx
-      break
-    end
-  end
-
-  if not current_idx then
-    return
-  end
-
-  local next_idx = current_idx + 1
-  if next_idx > #marks then
-    if config.loop_nav then
-      M.nav_file(1)
-    end
-  else
-    M.nav_file(next_idx)
-  end
-end
-
-function M.nav_prev()
-  log.trace("nav_prev()")
-  update_marks()
-
-  local current_buf = vim.fn.bufnr()
-  local current_idx = nil
-
-  for idx, mark in ipairs(marks) do
-    if mark.buf_id == current_buf then
-      current_idx = idx
-      break
-    end
-  end
-
-  if not current_idx then
-    return
-  end
-
-  local prev_idx = current_idx - 1
-  if prev_idx < 1 then
-    if config.loop_nav then
-      M.nav_file(#marks)
-    end
-  else
-    M.nav_file(prev_idx)
   end
 end
 
@@ -804,90 +606,6 @@ function M.refresh_menu()
   else
     render_collapsed()
   end
-end
-
--- Legacy compatibility functions (no-ops or redirects)
-function M.toggle_quick_menu()
-  M.toggle_menu()
-end
-
-function M.toggle_persistent_menu()
-  M.toggle_menu()
-end
-
-function M.select_menu_item(command)
-  M.select_current_line(command)
-end
-
-function M.select_persistent_buffer(idx)
-  M.select_buffer(idx)
-end
-
-function M.select_persistent_menu_item(command)
-  M.select_current_line(command)
-end
-
-function M.nav_to_last_buffer_from_quick()
-  -- Navigate to second buffer in list if available
-  update_marks()
-  if marks[2] then
-    M.nav_file(2)
-  end
-end
-
-function M.nav_to_last_buffer_from_persistent()
-  M.nav_to_last_buffer_from_quick()
-end
-
-function M.refresh_persistent_menu()
-  M.refresh_menu()
-end
-
-function M.refresh_quick_menu_if_open()
-  M.refresh_menu()
-end
-
-function M.save_menu_to_file(filename)
-  log.trace("save_menu_to_file()")
-  if filename == nil or filename == "" then
-    filename = vim.fn.input("Enter filename: ")
-    if filename == "" then
-      return
-    end
-  end
-  local file = io.open(filename, "w")
-  if file == nil then
-    log.error("save_menu_to_file(): Could not open file for writing")
-    return
-  end
-  for _, mark in pairs(marks) do
-    file:write(Path:new(mark.filename):absolute() .. "\n")
-  end
-  file:close()
-end
-
-function M.on_menu_save()
-  log.trace("on_menu_save()")
-end
-
-function M.location_window(options)
-  local default_options = {
-    relative = "editor",
-    style = "minimal",
-    width = options.width,
-    height = options.height,
-    row = 2,
-    col = 2,
-  }
-  options = vim.tbl_extend("keep", options, default_options)
-
-  local bufnr = options.bufnr or vim.api.nvim_create_buf(false, true)
-  local win_id = vim.api.nvim_open_win(bufnr, true, options)
-
-  return {
-    bufnr = bufnr,
-    win_id = win_id,
-  }
 end
 
 return M
