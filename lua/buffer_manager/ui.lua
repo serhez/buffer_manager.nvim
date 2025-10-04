@@ -12,6 +12,7 @@ local last_editor_win = nil
 local config = buffer_manager.get_config()
 local is_expanded = false
 local selection_mode_keymaps = {}
+local current_action = nil -- Track which action mode is active
 
 -- Set up highlight group for transparent background
 vim.api.nvim_set_hl(0, "BufferManagerNormal", { bg = "NONE", fg = "NONE" })
@@ -254,13 +255,23 @@ end
 local function set_selection_keybindings(smart_labels)
   clear_selection_keymaps()
 
+  -- Buffer selection labels
   for i, label in pairs(smart_labels) do
-    -- Don't override the main keymap (";")
     if label and label ~= " " and label ~= config.main_keymap then
       vim.keymap.set("n", label, function()
         require("buffer_manager.ui").select_buffer(i)
       end, { silent = true, desc = "Buffer Manager: Select buffer " .. i })
       table.insert(selection_mode_keymaps, label)
+    end
+  end
+
+  -- Action mode triggers
+  for action_name, action_config in pairs(config.actions) do
+    if action_config.key then
+      vim.keymap.set("n", action_config.key, function()
+        require("buffer_manager.ui").set_action_mode(action_name)
+      end, { silent = true, desc = "Buffer Manager: " .. action_name .. " mode" })
+      table.insert(selection_mode_keymaps, action_config.key)
     end
   end
 
@@ -450,6 +461,7 @@ function M.close_menu()
   Buffer_manager_win_id = nil
   Buffer_manager_bufh = nil
   is_expanded = false
+  current_action = nil
   clear_selection_keymaps()
 end
 
@@ -516,8 +528,6 @@ end
 
 -- Collapse menu back to dashes
 function M.collapse_menu()
-  log.trace("collapse_menu()")
-
   if
     not Buffer_manager_win_id
     or not vim.api.nvim_win_is_valid(Buffer_manager_win_id)
@@ -526,6 +536,7 @@ function M.collapse_menu()
   end
 
   is_expanded = false
+  current_action = nil -- Reset action mode when collapsing
   render_collapsed()
 end
 
@@ -534,29 +545,55 @@ function M.select_buffer(idx)
   local mark = marks[idx]
   if not mark then return end
 
-  -- Use the current window (which should be the window that had focus when menu was opened)
-  local target_win = vim.api.nvim_get_current_win()
+  -- Determine which action to execute
+  local action_to_use = current_action or "open"
+  local action_config = config.actions[action_to_use]
   
-  -- If somehow we're in a floating window, find a real window
-  if vim.api.nvim_win_get_config(target_win).relative ~= "" then
-    target_win = last_editor_win and vim.api.nvim_win_is_valid(last_editor_win) 
-      and last_editor_win 
-      or find_main_window()
+  if not action_config or not action_config.action then
+    vim.notify("Invalid action: " .. action_to_use, vim.log.levels.ERROR)
+    return
   end
 
-  vim.api.nvim_set_current_win(target_win)
+  -- For open action, set the target window first
+  if action_to_use == "open" then
+    local target_win = vim.api.nvim_get_current_win()
+    
+    -- If somehow we're in a floating window, find a real window
+    if vim.api.nvim_win_get_config(target_win).relative ~= "" then
+      target_win = last_editor_win and vim.api.nvim_win_is_valid(last_editor_win) 
+        and last_editor_win 
+        or find_main_window()
+    end
 
-  -- Open buffer
-  local bufnr = vim.fn.bufnr(mark.filename)
-  if bufnr ~= -1 then
-    vim.cmd("buffer " .. bufnr)
-  else
-    vim.cmd("edit " .. mark.filename)
+    vim.api.nvim_set_current_win(target_win)
   end
+
+  -- Execute the action
+  local success, err = pcall(action_config.action, mark.buf_id, mark.filename)
+  if not success then
+    vim.notify("Action failed: " .. tostring(err), vim.log.levels.ERROR)
+  end
+
+  -- Reset action mode
+  current_action = nil
 
   -- Collapse back to dashes
   is_expanded = false
   render_collapsed()
+end
+
+-- Set action mode
+function M.set_action_mode(action_name)
+  if not config.actions[action_name] then
+    vim.notify("Unknown action: " .. action_name, vim.log.levels.ERROR)
+    return
+  end
+  
+  current_action = action_name
+  vim.notify("Action mode: " .. action_name, vim.log.levels.INFO)
+  
+  -- Re-render to show action mode indicator (could add visual feedback later)
+  render_expanded()
 end
 
 -- Handle main keymap press

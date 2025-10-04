@@ -11,27 +11,34 @@
 
 ## About
 
-This plugin provides a minimalist buffer management system for Neovim with a unique transparent sidebar interface. The buffer manager displays as unobtrusive horizontal lines that expand to show buffer names and labels only when needed.
+A minimalist buffer management system for Neovim with a transparent floating sidebar. The buffer manager displays as unobtrusive dashes that expand to show buffer names and smart labels only when needed.
 
 > **Note**: This plugin was originally created by [j-morano](https://github.com/j-morano/buffer_manager.nvim) and has been redesigned with a minimalist, transparent UI approach.
 
 ## Features
 
 ### Minimalist UI
-- **Transparent Sidebar**: Middle-right positioned transparent floating window
+- **Transparent Sidebar**: Right-aligned transparent floating window
 - **Collapsed State**: Shows only horizontal dashes (─) for each buffer
-- **Expanded State**: Reveals buffer labels and names when triggered
+- **Expanded State**: Reveals buffer names and smart labels when triggered
 - **Auto-Collapse**: Returns to minimal dash display after buffer selection
+- **No Dependencies**: Works without plenary.nvim or any external dependencies
 
 ### Smart Navigation
-- **Quick Access**: Press trigger key (`;` by default) to expand labels
-- **Smart Labels**: Automatically assigns intuitive single-key labels to buffers
+- **Quick Access**: Press `;` to toggle/expand
+- **Last Accessed Buffer**: Press `;` twice to switch to last accessed buffer (marked with `;` label)
+- **Smart Labels**: Automatically assigns intuitive single-key labels based on filename
 - **Keyboard-Driven**: Select buffers with single keypresses
 
-### Developer-Friendly
-- **Complete Lua API**: All functionality exposed for custom configurations
-- **Vim Commands**: Convenient `:BufferManagerToggle` command
-- **Extensive Configuration**: Customize position, size, and appearance
+### Extensible Actions
+- **Built-in Actions**: Open (`<CR>`) and Delete (`d`) buffers
+- **Custom Actions**: Define your own buffer actions (git stage, copy path, etc.)
+- **Action Modes**: Press action key, then select buffer to apply action
+
+### Visual Indicators
+- **Current Buffer**: Bold highlighting
+- **Active Buffers**: Normal highlighting (visible in other windows)
+- **Inactive Buffers**: Comment highlighting (not visible)
 
 ## Installation
 
@@ -43,7 +50,6 @@ Install using your favorite plugin manager:
 ```lua
 {
   "your-username/buffer_manager.nvim",
-  dependencies = { "nvim-lua/plenary.nvim" },
   opts = {}
 }
 ```
@@ -52,7 +58,6 @@ Install using your favorite plugin manager:
 ```lua
 use({
   "your-username/buffer_manager.nvim",
-  requires = { "nvim-lua/plenary.nvim" },
   config = function()
     require("buffer_manager").setup({})
   end,
@@ -61,7 +66,6 @@ use({
 
 ### vim-plug
 ```vim
-Plug 'nvim-lua/plenary.nvim'
 Plug 'your-username/buffer_manager.nvim'
 ```
 
@@ -74,23 +78,14 @@ The plugin works out of the box with sensible defaults:
 require("buffer_manager").setup({})
 
 -- The main keymap ";" is automatically configured:
--- - Press ";" to toggle the buffer manager (creates if not open)
--- - When closed, ";" opens it showing dashes
--- - When open (collapsed), ";" expands to show labels
--- - When expanded, ";" or ESC collapses back to dashes
--- - Press any label key to select that buffer
+-- - Press ";" once: Opens menu (collapsed, shows dashes)
+-- - Press ";" again: Expands menu (shows labels and buffer names)
+-- - Press ";" third time: Switches to last accessed buffer
+-- - Press any label key: Opens that buffer
+-- - Press ESC: Collapses back to dashes
 ```
 
 ## Usage
-
-### Opening the Buffer Manager
-
-```lua
--- Toggle buffer manager
-:BufferManagerToggle
--- or
-:lua require("buffer_manager.ui").toggle_menu()
-```
 
 ### Buffer Manager States
 
@@ -99,67 +94,109 @@ The buffer manager has two visual states:
 #### Collapsed State (Default)
 Shows only horizontal dashes for each buffer:
 ```
-─────────────────────────
-─────────────────────────
-─────────────────────────
+──
+ ─
+──
 ```
+
+**Visual Indicators:**
+- `──` (double dash) = Active buffer (visible in some window)
+- ` ─` (space + dash) = Inactive buffer (not visible)
 
 **Actions:**
 - Press `;` to expand and show labels
-- Press `q` or `ESC` to close the menu
+- Press `ESC` to close the menu
 
 #### Expanded State
-Shows labels and buffer names:
+Shows buffer names with labels (right-aligned):
 ```
-a init.lua
-s ui.lua
-d README.md
+  init.lua a  
+    ui.lua ;  ← Last accessed buffer
+README.md s  
+  test.lua d  
 ```
+
+**Visual Indicators:**
+- **Bold** = Current buffer (in focused window)
+- Normal = Active buffer (in other windows)
+- *Dimmed* = Inactive buffer (not visible)
+- `;` label = Last accessed buffer (press `;` to switch to it)
 
 **Actions:**
-- Press any label key (`a`, `s`, `d`, etc.) to select that buffer
-- Press `;`, `q`, or `ESC` to collapse back to dashes
+- Press any label key to open that buffer
+- Press `;` to switch to last accessed buffer (marked with `;`)
+- Press `<CR>` to enter open mode, then select buffer
+- Press `d` to enter delete mode, then select buffer
+- Press `ESC` to collapse back to dashes
 
-### Smart Main Keymap Behavior
+### Action System
 
-The main keymap (`;` by default) has context-aware behavior:
+The buffer manager supports extensible actions:
 
-| State | Action | Result |
-|-------|--------|---------|
-| No menu open | Press `;` | Opens menu in collapsed state (dashes) |
-| Menu closed, not focused | Press `;` | Opens menu in collapsed state |
-| Menu open, collapsed | Press `;` | Expands to show labels and names |
-| Menu open, expanded | Press `;` | Collapses back to dashes |
-| Menu open, expanded | Press label key | Selects buffer and collapses to dashes |
+#### Built-in Actions
 
-### Navigation
-
-#### Direct Buffer Selection
-```lua
--- Navigate using the menu
--- 1. Open menu (;)
--- 2. Expand menu (;)
--- 3. Press label key (a, s, d, etc.)
-
--- Or programmatically:
-require("buffer_manager.ui").nav_file(1) -- First buffer
-require("buffer_manager.ui").nav_file(5) -- Fifth buffer
+**Open Mode** (`<CR>`)
+```
+1. Press ; to expand menu
+2. Press <CR> to enter open mode
+3. Press a label to open that buffer
 ```
 
-#### Sequential Navigation
-```lua
--- Next/previous buffer in list
-require("buffer_manager.ui").nav_next()
-require("buffer_manager.ui").nav_prev()
+**Delete Mode** (`d`)
+```
+1. Press ; to expand menu
+2. Press d to enter delete mode
+3. Press a label to delete that buffer
 ```
 
-### Buffer Management
+#### Custom Actions
 
-The buffer list automatically updates when buffers are created or deleted. Buffers are ordered by last used time by default.
+Define custom actions in your configuration:
+
+```lua
+require("buffer_manager").setup({
+  actions = {
+    -- Stage buffer in git
+    git_stage = {
+      key = "g",
+      action = function(buf_id, buf_name)
+        vim.cmd("!git add " .. vim.fn.shellescape(buf_name))
+        vim.notify("Staged: " .. buf_name)
+      end,
+    },
+    -- Copy file path to clipboard
+    copy_path = {
+      key = "y",
+      action = function(buf_id, buf_name)
+        vim.fn.setreg('+', buf_name)
+        vim.notify("Copied: " .. buf_name)
+      end,
+    },
+    -- Open in split
+    split_open = {
+      key = "s",
+      action = function(buf_id, buf_name)
+        vim.cmd("split")
+        vim.cmd("buffer " .. buf_id)
+      end,
+    },
+  }
+})
+```
+
+### Last Accessed Buffer
+
+The last accessed buffer (not currently visible) is automatically labeled with `;`:
+
+```lua
+-- Quick workflow:
+-- 1. Press ; to expand menu
+-- 2. See which buffer has the ; label
+-- 3. Press ; again to switch to it
+-- Or press any other label to switch to that buffer instead
+```
 
 ## Commands
-
-Buffer Manager provides a simple Vim command:
 
 ```vim
 :BufferManagerToggle  " Toggle the buffer manager menu
@@ -167,85 +204,66 @@ Buffer Manager provides a simple Vim command:
 
 ## Configuration
 
-### Basic Configuration
+### Minimal Configuration
 
 ```lua
 require("buffer_manager").setup({
-  -- Main keymap for toggling and expanding
-  main_keymap = ";",
-  
-  -- Menu dimensions
-  width = 30,  -- Width of the sidebar
-  height = 15, -- Maximum height (adapts to buffer count)
-  
-  -- Position offsets
-  offset_x = 2, -- Distance from right edge
-  offset_y = 0, -- Vertical offset from center
-  
-  -- Visual customization
-  dash_char = "─", -- Character used for collapsed state
+  main_keymap = ";",        -- Main toggle/expand key
+  offset_y = 0,             -- Vertical offset from center
+  dash_char = "─",          -- Character for collapsed state
+  label_padding = 1,        -- Padding around labels
 })
 ```
 
-### Advanced Configuration
+### Complete Configuration with Actions
 
 ```lua
 require("buffer_manager").setup({
-  -- Key bindings for buffer selection (smart labels)
-  line_keys = {
-    "a", "s", "d", "f", "r", "i", "o", "z", "x", "c", "n", "m",
-  },
-  
-  -- Commands available in menu
-  select_menu_item_commands = {
-    edit = {
-      key = "<CR>",
-      command = "edit",
-    },
-    split = {
-      key = "<C-s>",
-      command = "split",
-    },
-    vsplit = {
-      key = "<C-v>",
-      command = "vsplit",
-    },
-  },
-  
-  -- Buffer ordering
-  order_buffers = "lastused", -- "filename", "bufnr", "lastused", "fullpath"
+  -- Visual settings
+  main_keymap = ";",
+  offset_y = 0,
+  dash_char = "─",
+  label_padding = 1,
   
   -- Highlight groups
-  hl_label = "Search",     -- Highlight for label characters
-  hl_filename = "Bold",    -- Highlight for filenames
+  hl_label = "Search",      -- Label highlighting
+  hl_filename = "Bold",     -- Filename highlighting
   
-  -- Navigation behavior
-  loop_nav = true, -- Loop when using nav_next/nav_prev
+  -- Smart label keys (automatically assigned)
+  line_keys = {
+    "a", "s", "d", "f", "r", "i", "o", "z", "x", "c", "n", "m"
+  },
+  
+  -- Custom actions
+  actions = {
+    -- Add your custom actions here
+    git_stage = {
+      key = "g",
+      action = function(buf_id, buf_name)
+        vim.cmd("!git add " .. vim.fn.shellescape(buf_name))
+      end,
+    },
+  },
 })
 ```
 
-### Complete Configuration Options
+### Configuration Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `main_keymap` | string | `";"` | Primary key for menu toggle and expand |
-| `width` | number | `30` | Width of the sidebar |
-| `height` | number | `15` | Maximum height (adapts to buffer count) |
-| `offset_x` | number | `2` | Distance from right edge of screen |
 | `offset_y` | number | `0` | Vertical offset from center |
 | `dash_char` | string | `"─"` | Character for collapsed state lines |
-| `line_keys` | table | `{"a","s","d",...}` | Keys for buffer selection |
-| `select_menu_item_commands` | table | See defaults | Menu commands and keys |
-| `order_buffers` | string | `"lastused"` | Buffer ordering method |
-| `loop_nav` | boolean | `true` | Loop navigation with nav_next/nav_prev |
+| `label_padding` | number | `1` | Padding on left/right of labels |
+| `line_keys` | table | `{"a","s","d",...}` | Keys for smart label assignment |
 | `hl_label` | string | `"Search"` | Highlight group for labels |
 | `hl_filename` | string | `"Bold"` | Highlight group for filenames |
+| `actions` | table | Built-in actions | Action definitions (see Actions section) |
 
 ## Lua API
 
-All functionality is exposed through the Lua API:
+### Core Functions
 
-### Core Menu Functions
 ```lua
 -- Toggle menu (create or close)
 require("buffer_manager.ui").toggle_menu()
@@ -259,56 +277,35 @@ require("buffer_manager.ui").collapse_menu() -- Show dashes
 require("buffer_manager.ui").close_menu()    -- Close completely
 ```
 
-### Selection Functions
+### Action Functions
+
 ```lua
--- Select buffer by index
+-- Select buffer by index (executes current action)
 require("buffer_manager.ui").select_buffer(index)
 
--- Select buffer on current line with command
-require("buffer_manager.ui").select_current_line(command)
-```
-
-### Navigation Functions
-```lua
--- Direct buffer navigation
-require("buffer_manager.ui").nav_file(index, command)
-require("buffer_manager.ui").nav_next()
-require("buffer_manager.ui").nav_prev()
+-- Enter action mode
+require("buffer_manager.ui").set_action_mode("delete")
+require("buffer_manager.ui").set_action_mode("git_stage") -- custom action
 ```
 
 ### Utility Functions
+
 ```lua
 -- Refresh menu display
 require("buffer_manager.ui").refresh_menu()
-
--- Save buffer list to file
-require("buffer_manager.ui").save_menu_to_file()
-require("buffer_manager.ui").save_menu_to_file("filename")
 ```
 
 ## Example Keymaps
 
 ```lua
-local opts = { noremap = true, silent = true }
 local map = vim.keymap.set
+local opts = { noremap = true, silent = true }
 
--- Main buffer manager functionality
-map("n", ";", require("buffer_manager.ui").handle_main_keymap, opts)
+-- Main buffer manager functionality (automatically configured)
+-- map("n", ";", require("buffer_manager.ui").handle_main_keymap, opts)
 
 -- Alternative toggle
 map("n", "<leader>b", ":BufferManagerToggle<CR>", opts)
-
--- Navigation
-map("n", "<C-n>", require("buffer_manager.ui").nav_next, opts)
-map("n", "<C-p>", require("buffer_manager.ui").nav_prev, opts)
-
--- Direct buffer access (bypassing menu)
-local bmui = require("buffer_manager.ui")
-for i = 1, 9 do
-  map("n", "<leader>" .. i, function()
-    bmui.nav_file(i)
-  end, opts)
-end
 ```
 
 ## Advanced Usage
@@ -316,51 +313,98 @@ end
 ### Custom Highlighting
 
 ```lua
--- Set custom colors
-vim.api.nvim_set_hl(0, "BufferManagerLabel", { fg = "#ff6b6b", bold = true })
-vim.api.nvim_set_hl(0, "BufferManagerFilename", { fg = "#69c0ff" })
+-- Define custom highlights
+vim.api.nvim_set_hl(0, "BMLabel", { fg = "#ff6b6b", bold = true })
+vim.api.nvim_set_hl(0, "BMFile", { fg = "#69c0ff" })
 
--- Configure to use custom highlights
+-- Use them
 require("buffer_manager").setup({
-  hl_label = "BufferManagerLabel",
-  hl_filename = "BufferManagerFilename",
+  hl_label = "BMLabel",
+  hl_filename = "BMFile",
 })
 ```
 
 ### Custom Position
 
 ```lua
--- Position at top-right instead of middle-right
+-- Position higher on screen
 require("buffer_manager").setup({
-  offset_y = -10, -- Negative moves up from center
-  offset_x = 1,   -- Closer to edge
+  offset_y = -10,  -- Negative = up from center
 })
 
--- Position at bottom-right
+-- Position lower on screen
 require("buffer_manager").setup({
-  offset_y = 10,  -- Positive moves down from center
+  offset_y = 10,   -- Positive = down from center
 })
 ```
 
 ### Custom Dash Character
 
 ```lua
--- Use different characters for collapsed state
 require("buffer_manager").setup({
-  dash_char = "━", -- Thicker line
+  dash_char = "━",  -- Thicker line
   -- or
-  dash_char = "•", -- Bullets
+  dash_char = "•",  -- Bullets
   -- or
-  dash_char = " ", -- Invisible (just spacing)
+  dash_char = "│",  -- Vertical bar
 })
 ```
 
-## Logging
+## Action API Examples
 
-- Logs are written to `buffer_manager.log` in Neovim's cache directory (`:echo stdpath("cache")`)
-- Log levels: `trace`, `debug`, `info`, `warn`, `error`, `fatal` (default: `warn`)
-- Set log level with `vim.g.buffer_manager_log_level` (before `setup()`)
-- Environment variable `BUFFER_MANAGER_LOG=debug nvim` overrides config setting
+### Git Integration
+
+```lua
+actions = {
+  git_stage = {
+    key = "g",
+    action = function(buf_id, buf_name)
+      vim.cmd("!git add " .. vim.fn.shellescape(buf_name))
+    end,
+  },
+  git_unstage = {
+    key = "u",
+    action = function(buf_id, buf_name)
+      vim.cmd("!git reset " .. vim.fn.shellescape(buf_name))
+    end,
+  },
+}
+```
+
+### File Operations
+
+```lua
+actions = {
+  copy_path = {
+    key = "y",
+    action = function(buf_id, buf_name)
+      vim.fn.setreg('+', buf_name)
+      print("Copied: " .. buf_name)
+    end,
+  },
+  copy_filename = {
+    key = "Y",
+    action = function(buf_id, buf_name)
+      local name = vim.fn.fnamemodify(buf_name, ':t')
+      vim.fn.setreg('+', name)
+      print("Copied: " .. name)
+    end,
+  },
+}
+```
+
+### Terminal Integration
+
+```lua
+actions = {
+  run_file = {
+    key = "r",
+    action = function(buf_id, buf_name)
+      vim.cmd("terminal " .. vim.fn.shellescape(buf_name))
+    end,
+  },
+}
+```
 
 ## Contributing
 
