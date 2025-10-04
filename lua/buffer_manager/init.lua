@@ -8,7 +8,7 @@ M.marks = {}
 -- Built-in actions
 M.actions = {
   open = {
-    key = "<CR>",
+    key = "<C-o>",
     action = function(buf_id, buf_name)
       local bufnr = vim.fn.bufnr(buf_name)
       if bufnr ~= -1 then
@@ -19,7 +19,7 @@ M.actions = {
     end,
   },
   delete = {
-    key = "d",
+    key = "<C-d>",
     action = function(buf_id, buf_name)
       vim.api.nvim_buf_delete(buf_id, { force = false })
     end,
@@ -57,7 +57,31 @@ function M.setup(config)
   end
 
   -- Merge line_keys with extra keys, avoiding duplicates
-  local extra_keys = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "b", "e", "g", "h", "l", "m", "n", "p", "t", "u", "v", "w", "y" }
+  local extra_keys = {
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "b",
+    "e",
+    "g",
+    "h",
+    "l",
+    "m",
+    "n",
+    "p",
+    "t",
+    "u",
+    "v",
+    "w",
+    "y",
+  }
   local used = {}
   local merged = {}
 
@@ -82,7 +106,7 @@ function M.setup(config)
       table.insert(reserved, action_config.key)
     end
   end
-  
+
   BufferManagerConfig.line_keys = vim.tbl_filter(function(key)
     return not vim.tbl_contains(reserved, key)
   end, merged)

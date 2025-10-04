@@ -268,9 +268,14 @@ local function set_selection_keybindings(smart_labels)
   -- Action mode triggers
   for action_name, action_config in pairs(config.actions) do
     if action_config.key then
-      vim.keymap.set("n", action_config.key, function()
-        require("buffer_manager.ui").set_action_mode(action_name)
-      end, { silent = true, desc = "Buffer Manager: " .. action_name .. " mode" })
+      vim.keymap.set(
+        "n",
+        action_config.key,
+        function()
+          require("buffer_manager.ui").set_action_mode(action_name)
+        end,
+        { silent = true, desc = "Buffer Manager: " .. action_name .. " mode" }
+      )
       table.insert(selection_mode_keymaps, action_config.key)
     end
   end
@@ -543,12 +548,14 @@ end
 -- Select buffer by index
 function M.select_buffer(idx)
   local mark = marks[idx]
-  if not mark then return end
+  if not mark then
+    return
+  end
 
   -- Determine which action to execute
   local action_to_use = current_action or "open"
   local action_config = config.actions[action_to_use]
-  
+
   if not action_config or not action_config.action then
     vim.notify("Invalid action: " .. action_to_use, vim.log.levels.ERROR)
     return
@@ -557,11 +564,12 @@ function M.select_buffer(idx)
   -- For open action, set the target window first
   if action_to_use == "open" then
     local target_win = vim.api.nvim_get_current_win()
-    
+
     -- If somehow we're in a floating window, find a real window
     if vim.api.nvim_win_get_config(target_win).relative ~= "" then
-      target_win = last_editor_win and vim.api.nvim_win_is_valid(last_editor_win) 
-        and last_editor_win 
+      target_win = last_editor_win
+          and vim.api.nvim_win_is_valid(last_editor_win)
+          and last_editor_win
         or find_main_window()
     end
 
@@ -588,10 +596,10 @@ function M.set_action_mode(action_name)
     vim.notify("Unknown action: " .. action_name, vim.log.levels.ERROR)
     return
   end
-  
+
   current_action = action_name
   vim.notify("Action mode: " .. action_name, vim.log.levels.INFO)
-  
+
   -- Re-render to show action mode indicator (could add visual feedback later)
   render_expanded()
 end
