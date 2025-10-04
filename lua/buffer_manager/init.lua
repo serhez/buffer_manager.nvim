@@ -92,32 +92,30 @@ function M.setup(config)
       },
     },
     focus_alternate_buffer = false,
-    width = 65,
-    height = 10,
+    width = 30,
+    height = 15,
     short_file_names = false,
     show_depth = true,
     short_term_names = false,
     loop_nav = true,
     highlight = "",
-    hl_filename = "Bold",
-    hl_path = "Comment",
+    hl_label = "Search",
+    hl_cursor = "Bold",
+    hl_active = "Normal",
+    hl_inactive = "Comment",
     win_extra_options = {},
     borderchars = { "", "", "", "", "", "", "", "" },
     dir_separator_icon = "/",
     path_surrounding_icon = { "[", "]" },
     format_function = nil,
-    order_buffers = "lastused",
+    order_buffers = nil, -- Do not re-order buffers by default
     show_indicators = nil,
     main_keymap = ";",
-    -- Persistent menu configuration
-    persistent_menu = {
-      enabled = true,
-      width = 30,
-      height = 15,
-      position = "top-right", -- top-left, top-right, bottom-left, bottom-right
-      offset_x = 0,
-      offset_y = 1,
-    },
+    -- Menu position (middle-right)
+    offset_x = 2,
+    offset_y = 0,
+    dash_char = "─",
+    label_padding = 1, -- Padding on left and right of labels/content
   }
 
   local complete_config = merge_tables(default_config, config)

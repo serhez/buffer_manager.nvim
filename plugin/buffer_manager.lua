@@ -19,20 +19,19 @@ end
 -- Set up the keymap immediately (removed defer to reduce perceived lag)
 setup_main_keymap()
 
--- Create user commands for both menu types
-vim.api.nvim_create_user_command("BufferManagerTogglePersistent", function()
-  require("buffer_manager.ui").toggle_persistent_menu()
+-- Auto-open menu on startup
+vim.defer_fn(function()
+  require("buffer_manager.ui").toggle_menu()
+end, 100)
+
+-- Create user command for menu
+vim.api.nvim_create_user_command("BufferManagerToggle", function()
+  require("buffer_manager.ui").toggle_menu()
 end, {
-  desc = "Toggle the persistent buffer manager menu"
+  desc = "Toggle the buffer manager menu"
 })
 
-vim.api.nvim_create_user_command("BufferManagerToggleQuick", function()
-  require("buffer_manager.ui").toggle_quick_menu()
-end, {
-  desc = "Toggle the quick buffer manager menu"
-})
-
--- Autocmds to refresh menus when buffer list changes
+-- Autocmds to refresh menu when buffer list changes
 local augroup = vim.api.nvim_create_augroup('BufferManagerRefresh', { clear = true })
 vim.api.nvim_create_autocmd({ 'BufAdd', 'BufDelete', 'BufWipeout', 'BufUnload' }, {
   group = augroup,
@@ -45,12 +44,11 @@ vim.api.nvim_create_autocmd({ 'BufAdd', 'BufDelete', 'BufWipeout', 'BufUnload' }
     if vim.bo[bufnr].buftype ~= '' and vim.bo[bufnr].buftype ~= 'terminal' then return end
     -- Defer slightly to allow Neovim internal state to settle
     local ui = require('buffer_manager.ui')
-    ui.refresh_persistent_menu()
-    ui.refresh_quick_menu_if_open()
+    ui.refresh_menu()
   end,
-  desc = 'Auto-refresh buffer_manager menus'
+  desc = 'Auto-refresh buffer_manager menu'
 })
--- Track real buffer entries (future hook for improved alt-tab)
+-- Track real buffer entries
 local track_grp = vim.api.nvim_create_augroup('BufferManagerTrack', { clear = true })
 vim.api.nvim_create_autocmd('BufEnter', {
   group = track_grp,
@@ -59,10 +57,9 @@ vim.api.nvim_create_autocmd('BufEnter', {
     local ok, is_menu = pcall(vim.api.nvim_buf_get_var, bufnr, 'buffer_manager_menu')
     if ok and is_menu then return end
     if vim.bo[bufnr].buftype ~= '' and vim.bo[bufnr].buftype ~= 'terminal' then return end
-    -- On entering a real buffer, refresh menus to reflect lastused ordering or availability
+    -- On entering a real buffer, refresh menu
     local ui = require('buffer_manager.ui')
-    ui.refresh_persistent_menu()
-    ui.refresh_quick_menu_if_open()
+    ui.refresh_menu()
   end,
-  desc = 'Refresh buffer_manager menus on real buffer enter for alt-tab accuracy'
+  desc = 'Refresh buffer_manager menu on real buffer enter'
 })

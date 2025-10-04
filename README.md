@@ -2,7 +2,7 @@
 
 ![bm_logo_simple](https://github.com/user-attachments/assets/5bb65a2a-358f-4c3f-a776-93df0242ccba)
 
-### Advanced Neovim Buffer Manager with Dual Menu System
+### Minimalist Neovim Buffer Manager
 
 [![Neovim](https://img.shields.io/badge/Neovim%200.5+-green.svg?style=for-the-badge&logo=neovim)](https://neovim.io)
 [![Lua](https://img.shields.io/badge/Lua-blue.svg?style=for-the-badge&logo=lua)](http://www.lua.org)
@@ -11,30 +11,27 @@
 
 ## About
 
-This plugin provides an advanced buffer management system for Neovim with **two distinct menu types**: a **Quick Menu** for temporary buffer switching and a **Persistent Menu** for always-available buffer access. The plugin offers Alt-Tab-style navigation, smart focus management, and extensive customization options.
+This plugin provides a minimalist buffer management system for Neovim with a unique transparent sidebar interface. The buffer manager displays as unobtrusive horizontal lines that expand to show buffer names and labels only when needed.
 
-> **Note**: This plugin was originally created by [j-morano](https://github.com/j-morano/buffer_manager.nvim) and has been heavily modified and enhanced with dual menu system, persistent popups, alt-tab navigation, smart keymap handling, and comprehensive API exposure.
+> **Note**: This plugin was originally created by [j-morano](https://github.com/j-morano/buffer_manager.nvim) and has been redesigned with a minimalist, transparent UI approach.
 
 ## Features
 
-### Dual Menu System
-- **Quick Menu**: Centered popup with full file paths (traditional behavior)
-- **Persistent Menu**: Positioned popup with filenames only (stays open)
+### Minimalist UI
+- **Transparent Sidebar**: Middle-right positioned transparent floating window
+- **Collapsed State**: Shows only horizontal dashes (─) for each buffer
+- **Expanded State**: Reveals buffer labels and names when triggered
+- **Auto-Collapse**: Returns to minimal dash display after buffer selection
 
 ### Smart Navigation
-- **Alt-Tab Behavior**: Toggle between two most recent buffers with double keymap press
-- **Focus-Aware Logic**: Different behavior based on menu focus state
-- **Automatic Window Detection**: Always opens files in main window, never in popups
-
-### Advanced Key Handling
-- **Context-Sensitive Keys**: Same keys work differently based on menu state and focus
-- **Configurable Main Keymap**: Customize the primary navigation key (default: `;`)
-- **Per-Menu Keybindings**: Full Enter key support and label-based selection in both menus
+- **Quick Access**: Press trigger key (`;` by default) to expand labels
+- **Smart Labels**: Automatically assigns intuitive single-key labels to buffers
+- **Keyboard-Driven**: Select buffers with single keypresses
 
 ### Developer-Friendly
 - **Complete Lua API**: All functionality exposed for custom configurations
-- **Vim Commands**: Convenient `:BufferManager*` commands for quick access
-- **Extensive Configuration**: Fine-tune every aspect of both menu systems
+- **Vim Commands**: Convenient `:BufferManagerToggle` command
+- **Extensive Configuration**: Customize position, size, and appearance
 
 ## Installation
 
@@ -77,43 +74,51 @@ The plugin works out of the box with sensible defaults:
 require("buffer_manager").setup({})
 
 -- The main keymap ";" is automatically configured:
--- - Press ";" to open quick menu
--- - Press ";" again (or ";" + letter) for alt-tab behavior
--- - Use :BufferManagerTogglePersistent for persistent menu
+-- - Press ";" to toggle the buffer manager (creates if not open)
+-- - When closed, ";" opens it showing dashes
+-- - When open (collapsed), ";" expands to show labels
+-- - When expanded, ";" or ESC collapses back to dashes
+-- - Press any label key to select that buffer
 ```
 
 ## Usage
 
-### Quick Menu (Traditional Buffer Switching)
+### Opening the Buffer Manager
 
 ```lua
--- Open quick menu
-:BufferManagerToggleQuick
+-- Toggle buffer manager
+:BufferManagerToggle
 -- or
-:lua require("buffer_manager.ui").toggle_quick_menu()
+:lua require("buffer_manager.ui").toggle_menu()
 ```
 
-**Quick Menu Behavior:**
-- **Centered popup** showing **full file paths**
-- Press `Enter` or letter keys (`a`, `s`, `d`, etc.) to select buffer
-- **Closes automatically** after selection
-- Press `;` again to switch to last accessed buffer and close menu
+### Buffer Manager States
 
-### Persistent Menu (Always-Available Buffer Access)
+The buffer manager has two visual states:
 
-```lua
--- Toggle persistent menu
-:BufferManagerTogglePersistent
--- or
-:lua require("buffer_manager.ui").toggle_persistent_menu()
+#### Collapsed State (Default)
+Shows only horizontal dashes for each buffer:
+```
+─────────────────────────
+─────────────────────────
+─────────────────────────
 ```
 
-**Persistent Menu Behavior:**
-- **Positioned popup** (top-right by default) showing **filenames only**
-- Press `Enter` or letter keys to select buffer
-- **Stays open** after selection for quick successive switches
-- When menu is open but not focused, `;` focuses the menu
-- When menu is focused, `;` switches to last buffer and unfocuses menu
+**Actions:**
+- Press `;` to expand and show labels
+- Press `q` or `ESC` to close the menu
+
+#### Expanded State
+Shows labels and buffer names:
+```
+a init.lua
+s ui.lua
+d README.md
+```
+
+**Actions:**
+- Press any label key (`a`, `s`, `d`, etc.) to select that buffer
+- Press `;`, `q`, or `ESC` to collapse back to dashes
 
 ### Smart Main Keymap Behavior
 
@@ -121,53 +126,43 @@ The main keymap (`;` by default) has context-aware behavior:
 
 | State | Action | Result |
 |-------|--------|---------|
-| No persistent menu open | Press `;` | Opens quick menu |
-| In quick menu | Press `;` | Switch to last buffer & close menu |
-| Persistent menu open, not focused | Press `;` | Focus persistent menu |
-| Persistent menu focused | Press `;` | Switch to last buffer & unfocus menu |
-| In any menu | Press letter | Open corresponding buffer |
+| No menu open | Press `;` | Opens menu in collapsed state (dashes) |
+| Menu closed, not focused | Press `;` | Opens menu in collapsed state |
+| Menu open, collapsed | Press `;` | Expands to show labels and names |
+| Menu open, expanded | Press `;` | Collapses back to dashes |
+| Menu open, expanded | Press label key | Selects buffer and collapses to dashes |
 
-### Alt-Tab Style Navigation
+### Navigation
 
-Press the main keymap twice quickly to toggle between your two most recent buffers:
-- `;` `;` - Switch between current and previous buffer
-- Works from both menus and main editing windows
-- Maintains buffer history for seamless navigation
-
-### Buffer Management
-
-#### Navigation
+#### Direct Buffer Selection
 ```lua
--- Next/previous buffer in list
-require("buffer_manager.ui").nav_next()
-require("buffer_manager.ui").nav_prev()
+-- Navigate using the menu
+-- 1. Open menu (;)
+-- 2. Expand menu (;)
+-- 3. Press label key (a, s, d, etc.)
 
--- Direct navigation to buffer by index
+-- Or programmatically:
 require("buffer_manager.ui").nav_file(1) -- First buffer
 require("buffer_manager.ui").nav_file(5) -- Fifth buffer
 ```
 
-#### Buffer Operations
-- **Add buffer**: Write filename in menu (supports autocomplete with `<C-x><C-f>`)
-- **Remove buffer**: Delete line in menu (doesn't remove terminal or modified buffers)
-- **Reorder buffers**: Move lines up/down in menu
-
-#### Save Buffer Lists
+#### Sequential Navigation
 ```lua
--- Interactive filename input
-require("buffer_manager.ui").save_menu_to_file()
-
--- Direct filename
-require("buffer_manager.ui").save_menu_to_file("my_session.txt")
+-- Next/previous buffer in list
+require("buffer_manager.ui").nav_next()
+require("buffer_manager.ui").nav_prev()
 ```
+
+### Buffer Management
+
+The buffer list automatically updates when buffers are created or deleted. Buffers are ordered by last used time by default.
 
 ## Commands
 
-Buffer Manager provides convenient Vim commands:
+Buffer Manager provides a simple Vim command:
 
 ```vim
-:BufferManagerToggleQuick       " Toggle quick menu (centered popup)
-:BufferManagerTogglePersistent  " Toggle persistent menu (positioned popup)
+:BufferManagerToggle  " Toggle the buffer manager menu
 ```
 
 ## Configuration
@@ -176,23 +171,19 @@ Buffer Manager provides convenient Vim commands:
 
 ```lua
 require("buffer_manager").setup({
-  -- Main keymap for opening menus and alt-tab behavior
+  -- Main keymap for toggling and expanding
   main_keymap = ";",
-
-  -- Quick menu configuration (centered popup)
-  width = 90, -- Width of quick menu
-  height = 15, -- Height of quick menu
-  short_file_names = false, -- Show full paths in quick menu
-
-  -- Persistent menu configuration (positioned popup)
-  persistent_menu = {
-    enabled = true,
-    width = 50, -- Width of persistent menu
-    height = 15, -- Height of persistent menu
-    position = "top-right", -- Position: "top-left", "top-right", "bottom-left", "bottom-right"
-    offset_x = 2, -- Horizontal offset from edge
-    offset_y = 2, -- Vertical offset from edge
-  },
+  
+  -- Menu dimensions
+  width = 30,  -- Width of the sidebar
+  height = 15, -- Maximum height (adapts to buffer count)
+  
+  -- Position offsets
+  offset_x = 2, -- Distance from right edge
+  offset_y = 0, -- Vertical offset from center
+  
+  -- Visual customization
+  dash_char = "─", -- Character used for collapsed state
 })
 ```
 
@@ -200,23 +191,12 @@ require("buffer_manager").setup({
 
 ```lua
 require("buffer_manager").setup({
-  -- Key bindings for buffer selection
+  -- Key bindings for buffer selection (smart labels)
   line_keys = {
-    "a",
-    "s",
-    "d",
-    "f",
-    "r",
-    "i",
-    "o",
-    "z",
-    "x",
-    "c",
-    "n",
-    "m",
+    "a", "s", "d", "f", "r", "i", "o", "z", "x", "c", "n", "m",
   },
-
-  -- Commands available in menus
+  
+  -- Commands available in menu
   select_menu_item_commands = {
     edit = {
       key = "<CR>",
@@ -231,18 +211,16 @@ require("buffer_manager").setup({
       command = "vsplit",
     },
   },
-
+  
   -- Buffer ordering
   order_buffers = "lastused", -- "filename", "bufnr", "lastused", "fullpath"
-
-  -- Visual customization
-  highlight = "Normal:BufferManagerBorder",
-  borderchars = { "─", "│", "─", "│", "╭", "╮", "╯", "╰" },
-
-  -- Window options
-  win_extra_options = {
-    winhighlight = "Normal:BufferManagerNormal",
-  },
+  
+  -- Highlight groups
+  hl_label = "Search",     -- Highlight for label characters
+  hl_filename = "Bold",    -- Highlight for filenames
+  
+  -- Navigation behavior
+  loop_nav = true, -- Loop when using nav_next/nav_prev
 })
 ```
 
@@ -250,41 +228,44 @@ require("buffer_manager").setup({
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `main_keymap` | string | `";"` | Primary key for menu navigation and alt-tab |
+| `main_keymap` | string | `";"` | Primary key for menu toggle and expand |
+| `width` | number | `30` | Width of the sidebar |
+| `height` | number | `15` | Maximum height (adapts to buffer count) |
+| `offset_x` | number | `2` | Distance from right edge of screen |
+| `offset_y` | number | `0` | Vertical offset from center |
+| `dash_char` | string | `"─"` | Character for collapsed state lines |
 | `line_keys` | table | `{"a","s","d",...}` | Keys for buffer selection |
-| `select_menu_item_commands` | table | `{edit={key="<CR>",command="edit"}}` | Menu commands |
-| `focus_alternate_buffer` | boolean | `false` | Focus alternate buffer instead of current |
-| `width` | number | `65` | Quick menu width |
-| `height` | number | `10` | Quick menu height |
-| `short_file_names` | boolean | `false` | Show shortened paths in quick menu |
-| `show_depth` | boolean | `true` | Show directory depth |
-| `short_term_names` | boolean | `false` | Shorten terminal buffer names |
-| `loop_nav` | boolean | `true` | Loop navigation with nav_next/nav_prev |
-| `highlight` | string | `""` | Window highlight override |
-| `win_extra_options` | table | `{}` | Additional window options |
-| `borderchars` | table | See defaults | Border characters |
-| `format_function` | function | `nil` | Custom buffer name formatting |
+| `select_menu_item_commands` | table | See defaults | Menu commands and keys |
 | `order_buffers` | string | `"lastused"` | Buffer ordering method |
-| `show_indicators` | string | `nil` | Show buffer indicators ("before"/"after") |
-| `persistent_menu.enabled` | boolean | `true` | Enable persistent menu |
-| `persistent_menu.width` | number | `50` | Persistent menu width |
-| `persistent_menu.height` | number | `15` | Persistent menu height |
-| `persistent_menu.position` | string | `"top-right"` | Menu position |
-| `persistent_menu.offset_x` | number | `2` | Horizontal offset |
-| `persistent_menu.offset_y` | number | `2` | Vertical offset |
+| `loop_nav` | boolean | `true` | Loop navigation with nav_next/nav_prev |
+| `hl_label` | string | `"Search"` | Highlight group for labels |
+| `hl_filename` | string | `"Bold"` | Highlight group for filenames |
 
 ## Lua API
 
-All functionality is exposed through the Lua API for advanced users:
+All functionality is exposed through the Lua API:
 
 ### Core Menu Functions
 ```lua
--- Toggle menus
-require("buffer_manager.ui").toggle_quick_menu()
-require("buffer_manager.ui").toggle_persistent_menu()
+-- Toggle menu (create or close)
+require("buffer_manager.ui").toggle_menu()
 
 -- Smart keymap handler (used by main_keymap)
 require("buffer_manager.ui").handle_main_keymap()
+
+-- Manual state control
+require("buffer_manager.ui").expand_menu()   -- Show labels
+require("buffer_manager.ui").collapse_menu() -- Show dashes
+require("buffer_manager.ui").close_menu()    -- Close completely
+```
+
+### Selection Functions
+```lua
+-- Select buffer by index
+require("buffer_manager.ui").select_buffer(index)
+
+-- Select buffer on current line with command
+require("buffer_manager.ui").select_current_line(command)
 ```
 
 ### Navigation Functions
@@ -293,23 +274,14 @@ require("buffer_manager.ui").handle_main_keymap()
 require("buffer_manager.ui").nav_file(index, command)
 require("buffer_manager.ui").nav_next()
 require("buffer_manager.ui").nav_prev()
-
--- Alt-tab navigation
-require("buffer_manager.ui").nav_to_last_buffer_from_quick()
-require("buffer_manager.ui").nav_to_last_buffer_from_persistent()
 ```
 
-### Selection Functions
+### Utility Functions
 ```lua
--- Menu item selection
-require("buffer_manager.ui").select_menu_item(command)
-require("buffer_manager.ui").select_persistent_buffer(index)
-require("buffer_manager.ui").select_persistent_menu_item(command)
-```
+-- Refresh menu display
+require("buffer_manager.ui").refresh_menu()
 
-### File Management
-```lua
--- Save buffer lists
+-- Save buffer list to file
 require("buffer_manager.ui").save_menu_to_file()
 require("buffer_manager.ui").save_menu_to_file("filename")
 ```
@@ -323,9 +295,8 @@ local map = vim.keymap.set
 -- Main buffer manager functionality
 map("n", ";", require("buffer_manager.ui").handle_main_keymap, opts)
 
--- Menu toggles
-map("n", "<leader>bq", ":BufferManagerToggleQuick<CR>", opts)
-map("n", "<leader>bp", ":BufferManagerTogglePersistent<CR>", opts)
+-- Alternative toggle
+map("n", "<leader>b", ":BufferManagerToggle<CR>", opts)
 
 -- Navigation
 map("n", "<C-n>", require("buffer_manager.ui").nav_next, opts)
@@ -342,45 +313,46 @@ end
 
 ## Advanced Usage
 
-### Custom Menu Reordering
-
-Set up visual mode keymaps to reorder buffers in menus:
-
-```lua
-vim.api.nvim_create_autocmd("FileType", {
-  pattern = "buffer_manager",
-  callback = function()
-    vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv", { buffer = true })
-    vim.keymap.set("v", "K", ":m '<-2<CR>gv=gv", { buffer = true })
-  end,
-})
-```
-
 ### Custom Highlighting
 
 ```lua
--- Set custom colors for modified buffers
-vim.api.nvim_set_hl(0, "BufferManagerModified", { fg = "#ff6b6b" })
+-- Set custom colors
+vim.api.nvim_set_hl(0, "BufferManagerLabel", { fg = "#ff6b6b", bold = true })
+vim.api.nvim_set_hl(0, "BufferManagerFilename", { fg = "#69c0ff" })
 
--- Configure window highlights
+-- Configure to use custom highlights
 require("buffer_manager").setup({
-  highlight = "Normal:BufferManagerBorder",
-  win_extra_options = {
-    winhighlight = "Normal:BufferManagerNormal,FloatBorder:BufferManagerBorder",
-  },
+  hl_label = "BufferManagerLabel",
+  hl_filename = "BufferManagerFilename",
 })
 ```
 
-### Integration with Other Plugins
+### Custom Position
 
 ```lua
--- Example: Integration with telescope for buffer preview
-map("n", "<leader>bf", function()
-  require("buffer_manager.ui").toggle_quick_menu()
-  vim.defer_fn(function()
-    vim.cmd("Telescope live_grep")
-  end, 100)
-end, opts)
+-- Position at top-right instead of middle-right
+require("buffer_manager").setup({
+  offset_y = -10, -- Negative moves up from center
+  offset_x = 1,   -- Closer to edge
+})
+
+-- Position at bottom-right
+require("buffer_manager").setup({
+  offset_y = 10,  -- Positive moves down from center
+})
+```
+
+### Custom Dash Character
+
+```lua
+-- Use different characters for collapsed state
+require("buffer_manager").setup({
+  dash_char = "━", -- Thicker line
+  -- or
+  dash_char = "•", -- Bullets
+  -- or
+  dash_char = " ", -- Invisible (just spacing)
+})
 ```
 
 ## Logging
@@ -398,7 +370,6 @@ Contributions are welcome! Please open issues for bugs or feature requests, and 
 
 - **Original Plugin**: Created by [j-morano](https://github.com/j-morano/buffer_manager.nvim)
 - **Inspiration**: [Harpoon](https://github.com/ThePrimeagen/harpoon) by ThePrimeagen
-- **Buffer Management**: [bufdelete.nvim](https://github.com/famiu/bufdelete.nvim) for proper buffer deletion
 
 ## License
 
