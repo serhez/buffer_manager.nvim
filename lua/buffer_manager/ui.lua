@@ -115,13 +115,13 @@ local function update_marks()
   end
 end
 
--- Assign smart labels to buffers
+-- Assign smart labels to buffers with optimized first-character matching
 local function assign_smart_labels(buffers, available_keys)
   local label_assignment = {}
   local used_labels = {}
   local last_accessed_buf = get_last_accessed_buffer()
 
-  -- Assign ";" to last accessed buffer
+  -- Reserve ";" for last accessed buffer
   if last_accessed_buf then
     for i, mark in ipairs(buffers) do
       if mark.buf_id == last_accessed_buf then
@@ -132,30 +132,67 @@ local function assign_smart_labels(buffers, available_keys)
     end
   end
 
-  -- Try to match first alphanumeric character
+  -- Build a mapping of first characters to buffer indices
+  local char_to_buffers = {} -- { char -> { buffer_index1, buffer_index2, ... } }
   for i, mark in ipairs(buffers) do
-    if label_assignment[i] or i > #available_keys then
-      goto continue
-    end
-
-    local first_alnum = utils.get_file_name(mark.filename):match("[%w]")
-    if first_alnum then
-      local key = string.lower(first_alnum)
-      if vim.tbl_contains(available_keys, key) and not used_labels[key] then
-        label_assignment[i] = key
-        used_labels[key] = true
+    if not label_assignment[i] and i <= #available_keys then
+      local filename = utils.get_file_name(mark.filename)
+      local first_alnum = filename:match("[%w]")
+      if first_alnum then
+        local char_lower = string.lower(first_alnum)
+        if not char_to_buffers[char_lower] then
+          char_to_buffers[char_lower] = {}
+        end
+        table.insert(char_to_buffers[char_lower], i)
       end
     end
-    ::continue::
   end
 
-  -- Fill remaining with available keys
+  -- PASS 1: Assign labels to files where they're the ONLY one with that first char
+  -- This ensures maximum matching by prioritizing unique first characters
+  for char, buffer_indices in pairs(char_to_buffers) do
+    if #buffer_indices == 1 then
+      local i = buffer_indices[1]
+      -- Try lowercase first, then uppercase
+      local key_lower = string.lower(char)
+      local key_upper = string.upper(char)
+      
+      if vim.tbl_contains(available_keys, key_lower) and not used_labels[key_lower] then
+        label_assignment[i] = key_lower
+        used_labels[key_lower] = true
+      elseif vim.tbl_contains(available_keys, key_upper) and not used_labels[key_upper] then
+        label_assignment[i] = key_upper
+        used_labels[key_upper] = true
+      end
+    end
+  end
+
+  -- PASS 2: Assign labels to remaining files with matching first char
+  -- For files sharing the same first char, assign in order: lowercase, uppercase, then give up
+  for char, buffer_indices in pairs(char_to_buffers) do
+    if #buffer_indices > 1 then
+      local key_lower = string.lower(char)
+      local key_upper = string.upper(char)
+      
+      for _, i in ipairs(buffer_indices) do
+        if not label_assignment[i] then
+          if vim.tbl_contains(available_keys, key_lower) and not used_labels[key_lower] then
+            label_assignment[i] = key_lower
+            used_labels[key_lower] = true
+          elseif vim.tbl_contains(available_keys, key_upper) and not used_labels[key_upper] then
+            label_assignment[i] = key_upper
+            used_labels[key_upper] = true
+          end
+        end
+      end
+    end
+  end
+
+  -- PASS 3: Fill remaining buffers with any available keys
   local key_idx = 1
   for i = 1, math.min(#buffers, #available_keys) do
     if not label_assignment[i] then
-      while
-        key_idx <= #available_keys and used_labels[available_keys[key_idx]]
-      do
+      while key_idx <= #available_keys and used_labels[available_keys[key_idx]] do
         key_idx = key_idx + 1
       end
       if key_idx <= #available_keys then
