@@ -30,6 +30,72 @@ M.actions = {
   },
 }
 
+-- Keys to use for labels
+M.line_keys = {
+  "a",
+  "b",
+  "c",
+  "d",
+  "e",
+  "f",
+  "g",
+  "h",
+  "i",
+  "j",
+  "k",
+  "l",
+  "m",
+  "n",
+  "o",
+  "p",
+  "q",
+  "r",
+  "s",
+  "t",
+  "u",
+  "v",
+  "w",
+  "x",
+  "y",
+  "z",
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+  "G",
+  "H",
+  "I",
+  "J",
+  "K",
+  "L",
+  "M",
+  "N",
+  "O",
+  "P",
+  "Q",
+  "R",
+  "S",
+  "T",
+  "U",
+  "V",
+  "W",
+  "X",
+  "Y",
+  "Z",
+  "0",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+}
+
 function M.initialize_marks()
   for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
     local buf_name = vim.api.nvim_buf_get_name(buf_id)
@@ -43,7 +109,6 @@ function M.setup(config)
   config = config or {}
 
   local default_config = {
-    line_keys = { "a", "s", "d", "f", "r", "i", "o", "z", "x", "c", "n", "m" },
     hl_filename = "Bold",
     hl_open = "Search", -- Highlight for open action labels
     hl_delete = "ErrorMsg", -- Highlight for delete action labels (red)
@@ -68,60 +133,16 @@ function M.setup(config)
     BufferManagerConfig.actions = utils.merge_tables(M.actions, config.actions)
   end
 
-  -- Merge line_keys with extra keys, avoiding duplicates
-  local extra_keys = {
-    "0",
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "b",
-    "e",
-    "g",
-    "h",
-    "l",
-    "m",
-    "n",
-    "p",
-    "t",
-    "u",
-    "v",
-    "w",
-    "y",
-  }
-  local used = {}
-  local merged = {}
-
-  for _, key in ipairs(BufferManagerConfig.line_keys) do
-    if not used[key] then
-      table.insert(merged, key)
-      used[key] = true
-    end
-  end
-
-  for _, key in ipairs(extra_keys) do
-    if not used[key] then
-      table.insert(merged, key)
-      used[key] = true
-    end
-  end
-
   -- Filter out reserved keys (including action keys)
-  local reserved = { "q", "j", "k", "<Esc>", BufferManagerConfig.main_keymap }
+  local reserved = { "<Esc>", BufferManagerConfig.main_keymap }
   for _, action_config in pairs(BufferManagerConfig.actions) do
     if action_config.key then
       table.insert(reserved, action_config.key)
     end
   end
-
-  BufferManagerConfig.line_keys = vim.tbl_filter(function(key)
+  M.line_keys = vim.tbl_filter(function(key)
     return not vim.tbl_contains(reserved, key)
-  end, merged)
+  end, M.line_keys)
 end
 
 function M.get_config()

@@ -2,6 +2,7 @@ local buffer_manager = require("buffer_manager")
 local utils = require("buffer_manager.utils")
 local log = require("buffer_manager.dev").log
 local marks = require("buffer_manager").marks
+local line_keys = require("buffer_manager").line_keys
 
 local M = {}
 
@@ -421,7 +422,7 @@ local function render_expanded()
   end
 
   update_marks()
-  local smart_labels = assign_smart_labels(marks, config.line_keys)
+  local smart_labels = assign_smart_labels(marks, line_keys)
   local contents = {}
   local padding = config.label_padding or 1
   local padding_str = string.rep(" ", padding)

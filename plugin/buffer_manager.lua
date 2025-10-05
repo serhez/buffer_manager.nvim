@@ -73,3 +73,29 @@ vim.api.nvim_create_autocmd("WinEnter", {
   end,
   desc = "Update current window in buffer manager menu",
 })
+
+-- Autocmd to collapse the menu when moving the cursor in the editor
+vim.api.nvim_create_autocmd("CursorMoved", {
+  group = augroup,
+  callback = function(args)
+    if is_menu_buffer(args.buf) then
+      return
+    end
+    require("buffer_manager.ui").collapse_menu()
+  end,
+  desc = "Collapse buffer manager menu on cursor move",
+})
+vim.api.nvim_create_autocmd("WinEnter", {
+  group = augroup,
+  callback = function(args)
+    if is_menu_buffer(args.buf) then
+      return
+    end
+    local win_id = vim.api.nvim_get_current_win()
+    if not win_id or win_id == nil then
+      return
+    end
+    require("buffer_manager.ui").set_last_editor_win(win_id)
+  end,
+  desc = "Update current window in buffer manager menu",
+})
