@@ -135,7 +135,7 @@ local function assign_smart_labels(buffers, available_keys)
   -- Build a mapping of first characters to buffer indices
   local char_to_buffers = {} -- { char -> { buffer_index1, buffer_index2, ... } }
   for i, mark in ipairs(buffers) do
-    if not label_assignment[i] and i <= #available_keys then
+    if not label_assignment[i] then
       local filename = utils.get_file_name(mark.filename)
       local first_alnum = filename:match("[%w]")
       if first_alnum then
@@ -188,9 +188,9 @@ local function assign_smart_labels(buffers, available_keys)
     end
   end
 
-  -- PASS 3: Fill remaining buffers with any available keys
+  -- PASS 3: Fill remaining buffers with single-character available keys
   local key_idx = 1
-  for i = 1, math.min(#buffers, #available_keys) do
+  for i = 1, #buffers do
     if not label_assignment[i] then
       while key_idx <= #available_keys and used_labels[available_keys[key_idx]] do
         key_idx = key_idx + 1
@@ -199,6 +199,30 @@ local function assign_smart_labels(buffers, available_keys)
         label_assignment[i] = available_keys[key_idx]
         used_labels[available_keys[key_idx]] = true
         key_idx = key_idx + 1
+      else
+        -- Ran out of single-character keys, break to multi-char pass
+        break
+      end
+    end
+  end
+
+  -- PASS 4: Generate multi-character labels for remaining buffers
+  -- Use pattern: aa, ab, ac, ..., az, ba, bb, bc, ...
+  if #buffers > #available_keys then
+    local multi_char_idx = 1
+    for i = 1, #buffers do
+      if not label_assignment[i] then
+        local label
+        repeat
+          -- Generate multi-char label: convert index to base-26-ish
+          local first_idx = math.floor((multi_char_idx - 1) / #available_keys) + 1
+          local second_idx = ((multi_char_idx - 1) % #available_keys) + 1
+          label = available_keys[first_idx] .. available_keys[second_idx]
+          multi_char_idx = multi_char_idx + 1
+        until not used_labels[label]
+        
+        label_assignment[i] = label
+        used_labels[label] = true
       end
     end
   end
