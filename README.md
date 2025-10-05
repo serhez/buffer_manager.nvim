@@ -131,50 +131,58 @@ README.md s
 
 ### Action System
 
-The buffer manager supports extensible actions:
+The buffer manager supports extensible actions with **visual feedback** through label color changes:
 
 #### Built-in Actions
 
 **Open Mode** (`<CR>`)
 ```
 1. Press ; to expand menu
-2. Press <CR> to enter open mode
+2. Press <CR> to enter open mode (labels stay yellow/default)
 3. Press a label to open that buffer
 ```
 
 **Delete Mode** (`d`)
 ```
 1. Press ; to expand menu
-2. Press d to enter delete mode
+2. Press d to enter delete mode (labels turn RED)
 3. Press a label to delete that buffer
 ```
 
+**Visual Feedback:**
+- Normal mode: Labels use default highlight (Search - typically yellow/gold)
+- Delete mode: Labels turn RED (ErrorMsg highlight) to indicate danger
+- Custom modes: Labels use the highlight you specify
+
 #### Custom Actions
 
-Define custom actions in your configuration:
+Define custom actions with custom label colors:
 
 ```lua
 require("buffer_manager").setup({
   actions = {
-    -- Stage buffer in git
+    -- Stage buffer in git (green labels)
     git_stage = {
       key = "g",
+      hl = "DiffAdd",  -- Green labels for staging
       action = function(buf_id, buf_name)
         vim.cmd("!git add " .. vim.fn.shellescape(buf_name))
         vim.notify("Staged: " .. buf_name)
       end,
     },
-    -- Copy file path to clipboard
+    -- Copy file path to clipboard (bright labels)
     copy_path = {
       key = "y",
+      hl = "IncSearch",  -- Orange/bright labels
       action = function(buf_id, buf_name)
         vim.fn.setreg('+', buf_name)
         vim.notify("Copied: " .. buf_name)
       end,
     },
-    -- Open in split
+    -- Open in split (default labels)
     split_open = {
       key = "s",
+      -- hl not specified - uses default
       action = function(buf_id, buf_name)
         vim.cmd("split")
         vim.cmd("buffer " .. buf_id)
@@ -183,6 +191,11 @@ require("buffer_manager").setup({
   }
 })
 ```
+
+**Action Definition Fields:**
+- `key` (required): The key to activate this action mode
+- `action` (required): The function to execute (receives buf_id and buf_name)
+- `hl` (optional): Highlight group for labels in this mode (defaults to "Search" if not specified)
 
 ### Last Accessed Buffer
 
@@ -212,6 +225,10 @@ require("buffer_manager").setup({
   offset_y = 0,             -- Vertical offset from center
   dash_char = "─",          -- Character for collapsed state
   label_padding = 1,        -- Padding around labels
+  
+  -- Built-in action highlights
+  hl_open = "Search",       -- Default yellow/gold labels
+  hl_delete = "ErrorMsg",   -- Red labels for delete mode
 })
 ```
 
@@ -226,8 +243,9 @@ require("buffer_manager").setup({
   label_padding = 1,
   
   -- Highlight groups
-  hl_label = "Search",      -- Label highlighting
   hl_filename = "Bold",     -- Filename highlighting
+  hl_open = "Search",       -- Open mode label highlighting
+  hl_delete = "ErrorMsg",   -- Delete mode label highlighting (red)
   
   -- Smart label keys (automatically assigned)
   line_keys = {
@@ -256,9 +274,11 @@ require("buffer_manager").setup({
 | `dash_char` | string | `"─"` | Character for collapsed state lines |
 | `label_padding` | number | `1` | Padding on left/right of labels |
 | `line_keys` | table | `{"a","s","d",...}` | Keys for smart label assignment |
-| `hl_label` | string | `"Search"` | Highlight group for labels |
 | `hl_filename` | string | `"Bold"` | Highlight group for filenames |
+| `hl_open` | string | `"Search"` | Highlight group for open mode labels |
+| `hl_delete` | string | `"ErrorMsg"` | Highlight group for delete mode labels |
 | `actions` | table | Built-in actions | Action definitions (see Actions section) |
+| `default_action` | string | `"open"` | Default action mode when menu expands |
 
 ## Lua API
 
@@ -313,14 +333,33 @@ map("n", "<leader>b", ":BufferManagerToggle<CR>", opts)
 ### Custom Highlighting
 
 ```lua
--- Define custom highlights
-vim.api.nvim_set_hl(0, "BMLabel", { fg = "#ff6b6b", bold = true })
-vim.api.nvim_set_hl(0, "BMFile", { fg = "#69c0ff" })
-
--- Use them
+-- Simple: customize built-in action highlights
 require("buffer_manager").setup({
-  hl_label = "BMLabel",
-  hl_filename = "BMFile",
+  hl_open = "IncSearch",      -- Bright orange/yellow for open mode
+  hl_delete = "DiagnosticError", -- Bright red for delete mode
+  hl_filename = "Directory",   -- Custom color for filenames
+})
+
+-- Advanced: define custom highlights
+vim.api.nvim_set_hl(0, "BMOpen", { fg = "#69c0ff", bold = true })
+vim.api.nvim_set_hl(0, "BMDelete", { fg = "#ff6b6b", bold = true })
+
+require("buffer_manager").setup({
+  hl_open = "BMOpen",
+  hl_delete = "BMDelete",
+})
+
+-- Or override via actions (for full control)
+require("buffer_manager").setup({
+  actions = {
+    open = {
+      key = "<CR>",
+      hl = "String",  -- Green labels for open
+      action = function(buf_id, buf_name)
+        vim.cmd("buffer " .. buf_id)
+      end,
+    },
+  },
 })
 ```
 

@@ -9,19 +9,23 @@ M.marks = {}
 M.actions = {
   open = {
     key = "<C-o>",
-    action = function(buf_id, buf_name)
+    hl = "Search", -- Will be overridden by hl_open config
+    action = function(_, buf_name)
       local bufnr = vim.fn.bufnr(buf_name)
       if bufnr ~= -1 then
         vim.cmd("buffer " .. bufnr)
       else
         vim.cmd("edit " .. buf_name)
       end
+      require("buffer_manager.ui").collapse_menu()
     end,
   },
   delete = {
     key = "<C-d>",
-    action = function(buf_id, buf_name)
+    hl = "ErrorMsg", -- Will be overridden by hl_delete config
+    action = function(buf_id, _)
       vim.api.nvim_buf_delete(buf_id, { force = false })
+      require("buffer_manager.ui").refresh_menu()
     end,
   },
 }
@@ -40,16 +44,24 @@ function M.setup(config)
 
   local default_config = {
     line_keys = { "a", "s", "d", "f", "r", "i", "o", "z", "x", "c", "n", "m" },
-    hl_label = "Search",
     hl_filename = "Bold",
+    hl_open = "Search", -- Highlight for open action labels
+    hl_delete = "ErrorMsg", -- Highlight for delete action labels (red)
     main_keymap = ";",
     offset_y = 0,
     dash_char = "─",
     label_padding = 1,
-    actions = M.actions, -- Built-in actions (can be extended by user)
+    default_action = "open",
   }
 
   BufferManagerConfig = utils.merge_tables(default_config, config)
+
+  -- Update built-in actions with configured highlights
+  M.actions.open.hl = BufferManagerConfig.hl_open
+  M.actions.delete.hl = BufferManagerConfig.hl_delete
+
+  -- Set actions in config
+  BufferManagerConfig.actions = M.actions
 
   -- Merge user actions with built-in actions
   if config.actions then

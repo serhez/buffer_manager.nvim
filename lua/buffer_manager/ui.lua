@@ -7,12 +7,18 @@ local M = {}
 
 -- State variables
 Buffer_manager_win_id = nil
+Buffer_manager_win_id = nil
 Buffer_manager_bufh = nil
 local last_editor_win = nil
 local config = buffer_manager.get_config()
 local is_expanded = false
-local selection_mode_keymaps = {}
+local selection_mode_keymaps = {} -- Keys we've overridden
+local saved_keymaps = {} -- Original keymaps to restore
 local current_action = nil -- Track which action mode is active
+
+function M.set_last_editor_win(win_id)
+  last_editor_win = win_id
+end
 
 -- Set up highlight group for transparent background
 vim.api.nvim_set_hl(0, "BufferManagerNormal", { bg = "NONE", fg = "NONE" })
@@ -239,14 +245,79 @@ end
 
 -- Generate dash line for a buffer
 local function generate_dash_line(buf_id)
-  return is_buffer_active(buf_id) and (config.dash_char:rep(2))
+  return is_current_buffer(buf_id) and (config.dash_char:rep(2))
     or (" " .. config.dash_char)
 end
 
--- Clear all selection mode keymaps
+-- Save original keymap before overriding
+local function save_keymap(mode, key)
+  -- Normalize the key (e.g., "<C-d>" -> internal representation)
+  local normalized_key = vim.api.nvim_replace_termcodes(key, true, true, true)
+
+  -- Get current keymap for this key
+  local keymaps = vim.api.nvim_get_keymap(mode)
+  for _, map in ipairs(keymaps) do
+    -- Normalize the lhs for comparison
+    local map_lhs = vim.api.nvim_replace_termcodes(map.lhs, true, true, true)
+    if map_lhs == normalized_key then
+      saved_keymaps[key] = {
+        lhs = map.lhs,
+        rhs = map.rhs,
+        callback = map.callback,
+        expr = map.expr == 1,
+        noremap = map.noremap == 1,
+        silent = map.silent == 1,
+        nowait = map.nowait == 1,
+        script = map.script == 1,
+        buffer = map.buffer,
+        desc = map.desc,
+      }
+      return
+    end
+  end
+  -- No mapping found, mark as nil so we know to delete it on restore
+  saved_keymaps[key] = nil
+end
+
+-- Restore original keymap
+local function restore_keymap(mode, key)
+  local original = saved_keymaps[key]
+
+  -- Delete our override
+  pcall(vim.keymap.del, mode, key)
+
+  -- Restore original if it existed
+  if original then
+    local opts = {
+      noremap = original.noremap,
+      silent = original.silent,
+      expr = original.expr,
+      nowait = original.nowait,
+      script = original.script,
+      desc = original.desc,
+    }
+
+    if original.callback then
+      vim.keymap.set(mode, key, original.callback, opts)
+    elseif original.rhs then
+      if original.noremap then
+        -- Use the exact lhs from the original mapping
+        vim.api.nvim_set_keymap(mode, original.lhs, original.rhs, opts)
+      else
+        -- For non-noremap, we need to use the API that preserves remapping
+        opts.remap = true
+        vim.keymap.set(mode, original.lhs, original.rhs, opts)
+      end
+    end
+  end
+
+  saved_keymaps[key] = nil
+end
+
+-- Clear all selection mode keymaps and restore originals
 local function clear_selection_keymaps()
   for _, key in ipairs(selection_mode_keymaps) do
-    pcall(vim.keymap.del, "n", key)
+    restore_keymap("n", key)
   end
   selection_mode_keymaps = {}
 end
@@ -258,6 +329,7 @@ local function set_selection_keybindings(smart_labels)
   -- Buffer selection labels
   for i, label in pairs(smart_labels) do
     if label and label ~= " " and label ~= config.main_keymap then
+      save_keymap("n", label)
       vim.keymap.set("n", label, function()
         require("buffer_manager.ui").select_buffer(i)
       end, { silent = true, desc = "Buffer Manager: Select buffer " .. i })
@@ -268,6 +340,7 @@ local function set_selection_keybindings(smart_labels)
   -- Action mode triggers
   for action_name, action_config in pairs(config.actions) do
     if action_config.key then
+      save_keymap("n", action_config.key)
       vim.keymap.set(
         "n",
         action_config.key,
@@ -416,18 +489,24 @@ local function render_expanded()
       local label_end = label_start + #label + padding -- label + right padding
 
       -- Determine highlight groups
-      local label_hl = config.hl_label or "Search"
-      local filename_hl
+      -- Use current action's highlight, or default action's highlight
+      local action_name = current_action or config.default_action or "open"
+      local label_hl = "Search" -- Fallback
 
+      if config.actions[action_name] and config.actions[action_name].hl then
+        label_hl = config.actions[action_name].hl
+      end
+
+      local filename_hl
       if is_current then
         -- Current buffer in the focused window: use Bold
-        filename_hl = config.hl_cursor or "Bold"
+        filename_hl = config.hl_filename or "Bold"
       elseif is_active then
         -- Active in other windows: use Normal (no special highlighting)
-        filename_hl = config.hl_active or "Normal"
+        filename_hl = "Normal"
       else
         -- Not visible anywhere: use Comment
-        filename_hl = config.hl_inactive or "Comment"
+        filename_hl = "Comment"
       end
 
       -- Highlight filename
@@ -500,7 +579,7 @@ function M.toggle_menu()
   local total_buffers = #marks
 
   if total_buffers == 0 then
-    vim.notify("[buffer_manager] No buffers to display", vim.log.levels.INFO)
+    vim.notify("No buffers to display", vim.log.levels.INFO)
     return
   end
 
@@ -518,8 +597,6 @@ end
 
 -- Expand menu to show labels and names
 function M.expand_menu()
-  log.trace("expand_menu()")
-
   if
     not Buffer_manager_win_id
     or not vim.api.nvim_win_is_valid(Buffer_manager_win_id)
@@ -528,6 +605,8 @@ function M.expand_menu()
   end
 
   is_expanded = true
+  -- Set default action mode on expand
+  current_action = config.default_action or "open"
   render_expanded()
 end
 
@@ -581,13 +660,6 @@ function M.select_buffer(idx)
   if not success then
     vim.notify("Action failed: " .. tostring(err), vim.log.levels.ERROR)
   end
-
-  -- Reset action mode
-  current_action = nil
-
-  -- Collapse back to dashes
-  is_expanded = false
-  render_collapsed()
 end
 
 -- Set action mode
