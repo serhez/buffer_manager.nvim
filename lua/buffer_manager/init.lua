@@ -105,6 +105,70 @@ function M.initialize_marks()
   end
 end
 
+-- Get least recently used buffer (excluding current buffer and visible buffers)
+function M.get_lru_buffer()
+  local current_buf = vim.api.nvim_get_current_buf()
+  local visible_bufs = {}
+
+  -- Collect all visible buffers
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_is_valid(win) then
+      local buf = vim.api.nvim_win_get_buf(win)
+      visible_bufs[buf] = true
+    end
+  end
+
+  local lru_buf = nil
+  local lru_time = math.huge
+
+  -- Find the least recently used buffer using Neovim's built-in lastused
+  for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+    local buf_name = vim.api.nvim_buf_get_name(buf_id)
+    if utils.buffer_is_valid(buf_id, buf_name)
+       and buf_id ~= current_buf
+       and not visible_bufs[buf_id] then
+      local buf_info = vim.fn.getbufinfo(buf_id)[1]
+      if buf_info then
+        local lastused = buf_info.lastused or 0
+        if lastused < lru_time then
+          lru_time = lastused
+          lru_buf = buf_id
+        end
+      end
+    end
+  end
+
+  return lru_buf
+end
+
+-- Enforce buffer limit by deleting LRU buffer if needed
+function M.enforce_buffer_limit()
+  local config = M.get_config()
+  if config.max_open_buffers <= 0 then
+    return -- No limit
+  end
+
+  -- Count valid buffers
+  local valid_buffers = 0
+  for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+    local buf_name = vim.api.nvim_buf_get_name(buf_id)
+    if utils.buffer_is_valid(buf_id, buf_name) then
+      valid_buffers = valid_buffers + 1
+    end
+  end
+
+  -- Delete LRU buffers until we're under the limit
+  while valid_buffers > config.max_open_buffers do
+    local lru_buf = M.get_lru_buffer()
+    if not lru_buf then
+      break -- No more buffers to delete
+    end
+
+    pcall(vim.api.nvim_buf_delete, lru_buf, { force = false })
+    valid_buffers = valid_buffers - 1
+  end
+end
+
 function M.setup(config)
   config = config or {}
 
@@ -117,6 +181,7 @@ function M.setup(config)
     dash_char = "─",
     label_padding = 1,
     default_action = "open",
+    max_open_buffers = -1, -- Maximum number of open buffers (-1 = unlimited)
   }
 
   BufferManagerConfig = utils.merge_tables(default_config, config)

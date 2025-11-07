@@ -18,6 +18,11 @@ end
 
 setup_main_keymap()
 
+-- Enforce buffer limit on startup
+vim.defer_fn(function()
+  require("buffer_manager").enforce_buffer_limit()
+end, 50)
+
 -- Auto-open menu on startup
 vim.defer_fn(function()
   require("buffer_manager.ui").toggle_menu()
@@ -107,4 +112,16 @@ vim.api.nvim_create_autocmd("VimResized", {
     require("buffer_manager.ui").refresh_menu()
   end,
   desc = "Refresh buffer manager menu on window resize",
+})
+
+-- Enforce buffer limit when a new buffer is added
+vim.api.nvim_create_autocmd("BufAdd", {
+  group = augroup,
+  callback = function(args)
+    if is_menu_buffer(args.buf) then
+      return
+    end
+    require("buffer_manager").enforce_buffer_limit()
+  end,
+  desc = "Enforce maximum buffer limit",
 })
