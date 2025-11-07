@@ -99,3 +99,12 @@ vim.api.nvim_create_autocmd("WinEnter", {
   end,
   desc = "Update current window in buffer manager menu",
 })
+
+-- Autocmd to refresh menu when terminal is resized
+vim.api.nvim_create_autocmd("VimResized", {
+  group = augroup,
+  callback = function()
+    require("buffer_manager.ui").refresh_menu()
+  end,
+  desc = "Refresh buffer manager menu on window resize",
+})
