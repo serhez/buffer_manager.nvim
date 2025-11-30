@@ -102,10 +102,6 @@ M.line_keys = {
 
 local function setup_main_keymap()
   local config = M.get_config()
-  vim.notify(
-    "Setting main keymap: " .. tostring(config.main_keymap),
-    vim.log.levels.DEBUG
-  )
   if config.main_keymap and config.main_keymap ~= "" then
     vim.keymap.set(
       "n",
