@@ -121,12 +121,12 @@ local function assign_smart_labels(buffers, available_keys)
   local used_labels = {}
   local last_accessed_buf = get_last_accessed_buffer()
 
-  -- Reserve ";" for last accessed buffer
+  -- Reserve main keymap for last accessed buffer
   if last_accessed_buf then
     for i, mark in ipairs(buffers) do
       if mark.buf_id == last_accessed_buf then
-        label_assignment[i] = ";"
-        used_labels[";"] = true
+        label_assignment[i] = config.main_keymap
+        used_labels[config.main_keymap] = true
         break
       end
     end
@@ -156,11 +156,17 @@ local function assign_smart_labels(buffers, available_keys)
       -- Try lowercase first, then uppercase
       local key_lower = string.lower(char)
       local key_upper = string.upper(char)
-      
-      if vim.tbl_contains(available_keys, key_lower) and not used_labels[key_lower] then
+
+      if
+        vim.tbl_contains(available_keys, key_lower)
+        and not used_labels[key_lower]
+      then
         label_assignment[i] = key_lower
         used_labels[key_lower] = true
-      elseif vim.tbl_contains(available_keys, key_upper) and not used_labels[key_upper] then
+      elseif
+        vim.tbl_contains(available_keys, key_upper)
+        and not used_labels[key_upper]
+      then
         label_assignment[i] = key_upper
         used_labels[key_upper] = true
       end
@@ -173,13 +179,19 @@ local function assign_smart_labels(buffers, available_keys)
     if #buffer_indices > 1 then
       local key_lower = string.lower(char)
       local key_upper = string.upper(char)
-      
+
       for _, i in ipairs(buffer_indices) do
         if not label_assignment[i] then
-          if vim.tbl_contains(available_keys, key_lower) and not used_labels[key_lower] then
+          if
+            vim.tbl_contains(available_keys, key_lower)
+            and not used_labels[key_lower]
+          then
             label_assignment[i] = key_lower
             used_labels[key_lower] = true
-          elseif vim.tbl_contains(available_keys, key_upper) and not used_labels[key_upper] then
+          elseif
+            vim.tbl_contains(available_keys, key_upper)
+            and not used_labels[key_upper]
+          then
             label_assignment[i] = key_upper
             used_labels[key_upper] = true
           end
@@ -192,7 +204,9 @@ local function assign_smart_labels(buffers, available_keys)
   local key_idx = 1
   for i = 1, #buffers do
     if not label_assignment[i] then
-      while key_idx <= #available_keys and used_labels[available_keys[key_idx]] do
+      while
+        key_idx <= #available_keys and used_labels[available_keys[key_idx]]
+      do
         key_idx = key_idx + 1
       end
       if key_idx <= #available_keys then
@@ -215,12 +229,13 @@ local function assign_smart_labels(buffers, available_keys)
         local label
         repeat
           -- Generate multi-char label: convert index to base-26-ish
-          local first_idx = math.floor((multi_char_idx - 1) / #available_keys) + 1
+          local first_idx = math.floor((multi_char_idx - 1) / #available_keys)
+            + 1
           local second_idx = ((multi_char_idx - 1) % #available_keys) + 1
           label = available_keys[first_idx] .. available_keys[second_idx]
           multi_char_idx = multi_char_idx + 1
         until not used_labels[label]
-        
+
         label_assignment[i] = label
         used_labels[label] = true
       end
@@ -744,7 +759,7 @@ function M.handle_main_keymap()
     Buffer_manager_win_id and vim.api.nvim_win_is_valid(Buffer_manager_win_id)
   then
     if is_expanded then
-      -- Menu is expanded - pressing ";" again switches to last accessed buffer
+      -- Menu is expanded - pressing main keymap again switches to last accessed buffer
       local last_buf = get_last_accessed_buffer()
       if last_buf then
         local buf_idx = get_buffer_index(last_buf)
